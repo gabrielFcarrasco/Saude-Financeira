@@ -123,7 +123,7 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
                 <h3 style={{ color: '#fff', fontSize: '1.5rem', textAlign: 'center', margin: '0 0 16px 0', lineHeight: '1.2' }}>
                   As 4 Fases<br/><span style={{ color: 'var(--accent)' }}>Financeiras</span>
                 </h3>
-                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', textAlign: 'center', margin: 0 }}>O mapa definitivo da riqueza.</p>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', textAlign: 'center', margin: 0 }}>ebook gratuito, das ferramentas que aprendi a usar.</p>
                 <div style={{ position: 'absolute', bottom: '15px', right: '15px', color: 'var(--accent)' }}>GC</div>
               </div>
 
@@ -139,20 +139,19 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
                   <strong>4. Liberdade Financeira</strong> (O dinheiro trabalha por você)
                 </p>
                 
-                {/* Botão transformado em Link de Download Nativo com ícone SVG */}
                 <a 
                   href="/Ebook/Finanças Pessoais - As 4 Fases da Vida Financeira (Gabriel Carrasco).pdf" 
-                  download="Guia As 4Fases Financeiras- Gabriel Carrasco.pdf"
-                  className="primary" 
-                  style={{ padding: '16px 32px', fontSize: '1.15rem', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', textDecoration: 'none', boxSizing: 'border-box', borderRadius: '8px' }}
+                  download="Guia_As_4Fases_Financeiras_Gabriel_Carrasco.pdf"
+                  className="btn-download" 
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                     <polyline points="7 10 12 15 17 10"></polyline>
                     <line x1="12" y1="15" x2="12" y2="3"></line>
                   </svg>
                   Baixar E-book Gratuito (PDF)
                 </a>
+                
               </div>
             </div>
           </div>

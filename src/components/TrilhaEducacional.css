@@ -1,4 +1,15 @@
 /* =========================================
+   BLINDAGEM RESPONSIVA GLOBAL (Coloque no topo)
+   Garante que paddings não quebrem a largura de 100%
+   ========================================= */
+.card,
+.card *,
+.card *::before,
+.card *::after {
+  box-sizing: border-box !important;
+}
+
+/* =========================================
    CONTEÚDO DA TRILHA
    ========================================= */
 .step-content {
@@ -8,6 +19,8 @@
   border: 1px solid var(--border);
   box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.2);
   margin-bottom: 24px;
+  /* Garantia responsiva */
+  max-width: 100% !important;
 }
 
 /* =========================================
@@ -19,6 +32,8 @@
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.3s ease;
+  /* Garantia responsiva */
+  max-width: 100% !important;
 }
 
 .interactive-card:hover {
@@ -76,6 +91,8 @@
   padding: 32px;
   border-radius: 16px;
   border: 1px solid var(--border);
+  /* Garantia responsiva */
+  max-width: 100% !important;
 }
 
 .ebook-cover {
@@ -95,9 +112,36 @@
 }
 
 /* =========================================
-   RESPONSIVIDADE E ANIMAÇÕES
+   A MÁGICA PARA O CELULAR (RESPONSIVO)
    ========================================= */
 @media (max-width: 768px) {
+  /* GARANTIR QUE O CARD PRINCIPAL TENHA MARGENS DE SEGURANÇA */
+  .card {
+    padding-left: 16px !important; /* Cria um "respiro" nas bordas laterais */
+    padding-right: 16px !important;
+  }
+
+  /* FORÇAR QUEBRA DE LINHA NO TÍTULO CORTADO ("1. Diagnóstico Profund...") */
+  .card h2 {
+    word-wrap: break-word; /* Quebra palavras muito longas */
+    white-space: normal !important; /* Garante que o texto pule de linha */
+    font-size: 1.6rem !important; /* Diminui um pouco o tamanho para mobile */
+    line-height: 1.3 !important;
+  }
+
+  /* Ajustar o título principal "Trilha de Aprendizado" */
+  .card h1 {
+     font-size: 2rem !important;
+     word-wrap: break-word;
+     white-space: normal !important;
+  }
+
+  /* Reduzir paddings internos no mobile para ganhar espaço */
+  .step-content {
+    padding: 24px 16px !important;
+  }
+
+  /* Responsividade do E-book */
   .ebook-container {
     flex-direction: column;
     text-align: center;
@@ -115,6 +159,7 @@
   }
 }
 
+/* ANIMAÇÃO SUAVE */
 .animate-fade-in {
   animation: fadeIn 0.4s ease forwards;
 }
@@ -125,73 +170,33 @@
 }
 
 /* =========================================
-   NAVEGAÇÃO (BOTÕES AVANÇAR E VOLTAR)
+   BOTÃO DE DOWNLOAD (E-BOOK)
    ========================================= */
-.trilha-nav {
+.btn-download {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 48px;
-  border-top: 1px solid var(--border);
-  padding-top: 24px;
-  gap: 16px;
-}
-
-.btn-nav-primary {
-  min-width: 200px;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 14px 24px;
-}
-
-.btn-nav-primary.btn-final {
-  background: #2c3e50;
-  border-color: #2c3e50;
-}
-
-.btn-nav-secundary {
-  display: flex;
   align-items: center;
-  gap: 8px;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 14px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 32px;
+  font-size: 1.15rem;
   font-weight: 600;
+  color: #ffffff !important; /* Garante que o texto fique branco e não com cor de link */
+  background: linear-gradient(135deg, var(--accent) 0%, #8a2be2 100%);
+  border-radius: 12px;
+  text-decoration: none;
+  box-shadow: 0 4px 15px rgba(138, 43, 226, 0.3);
+  transition: all 0.3s ease;
+  cursor: pointer;
 }
 
-.btn-nav-secundary:hover:not(:disabled) {
-  background: var(--code-bg);
-  border-color: var(--text-h);
-  color: var(--text-h);
+.btn-download:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(138, 43, 226, 0.5);
+  text-decoration: none;
 }
 
-.btn-nav-secundary:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
+.btn-download:active {
+  transform: translateY(1px);
 }
 
-/* =========================================
-   A MÁGICA PARA O CELULAR (RESPONSIVO)
-   ========================================= */
-@media (max-width: 768px) {
-  /* Os botões ficam um embaixo do outro no mobile */
-  .trilha-nav {
-    flex-direction: column-reverse; /* Coloca o botão "Próximo" acima do "Voltar" */
-    align-items: stretch; /* Faz os botões esticarem até o limite da tela */
-    padding-top: 20px;
-  }
-  
-  .btn-nav-primary, 
-  .btn-nav-secundary {
-    width: 100%;
-    min-width: 100%;
-    justify-content: center; /* Centraliza o texto e o ícone no celular */
-    padding: 16px;
-  }
-}
