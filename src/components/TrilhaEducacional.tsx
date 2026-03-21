@@ -9,11 +9,11 @@ interface TrilhaProps {
 
 export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
   const [passoAtual, setPassoAtual] = useState(1);
-  const [expandedCard, setExpandedCard] = useState<number | null>(null); // Controla os accordions
+  const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const totalPassos = trilhaData.length;
 
   const avancar = () => {
-    setExpandedCard(null); // Fecha os cards ao mudar de tela
+    setExpandedCard(null);
     setPassoAtual((prev) => Math.min(prev + 1, totalPassos));
   };
   const voltar = () => {
@@ -30,7 +30,7 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
 
   return (
     <div className="card" style={{ maxWidth: '900px', width: '100%', margin: '0 auto', position: 'relative' }}>
-      
+
       {/* Barra de Progresso Dinâmica */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '32px' }}>
         {[...Array(totalPassos)].map((_, index) => (
@@ -73,9 +73,10 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
                       <span style={{ fontSize: '1.2rem', color: 'var(--accent)' }}>{card.titulo}</span>
                       <span style={{ fontSize: '0.95rem', color: 'var(--text)', fontWeight: 'normal' }}>{card.resumo}</span>
                     </div>
-                    <span style={{ fontSize: '1.5rem', transform: expandedCard === idx ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.3s ease' }}>
-                      ▼
-                    </span>
+                    {/* Ícone chevron SVG substituindo o emoji de seta */}
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expandedCard === idx ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.3s ease' }}>
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
                   </div>
                   <div className="interactive-body">
                     <p style={{ fontSize: '1.1rem', lineHeight: '1.7', margin: 0, color: 'var(--text)' }}>
@@ -115,7 +116,7 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
         {dadosPasso.tipo === 'ebook' && (
           <div className="step-content animate-fade-in">
             <p style={{ fontSize: '1.2rem', marginBottom: '32px', textAlign: 'center', color: 'var(--text)' }}>{dadosPasso.descricao}</p>
-            
+
             <div className="ebook-container">
               {/* Capa do Livro em CSS Puro */}
               <div className="ebook-cover">
@@ -137,9 +138,21 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
                   <strong>3. Acumulação</strong> (Os juros ao seu favor)<br/>
                   <strong>4. Liberdade Financeira</strong> (O dinheiro trabalha por você)
                 </p>
-                <button className="primary" style={{ padding: '16px 32px', fontSize: '1.15rem', width: '100%', display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                  <span>📥</span> Baixar E-book Gratuito (PDF)
-                </button>
+                
+                {/* Botão transformado em Link de Download Nativo com ícone SVG */}
+                <a 
+                  href="/ebook-gc-planner.pdf" 
+                  download="Guia_Fases_Financeiras_GC.pdf"
+                  className="primary" 
+                  style={{ padding: '16px 32px', fontSize: '1.15rem', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', textDecoration: 'none', boxSizing: 'border-box', borderRadius: '8px' }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  Baixar E-book Gratuito (PDF)
+                </a>
               </div>
             </div>
           </div>
@@ -152,14 +165,22 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
         <button 
           onClick={voltar} 
           disabled={passoAtual === 1} 
-          style={{ opacity: passoAtual === 1 ? 0.3 : 1, cursor: passoAtual === 1 ? 'not-allowed' : 'pointer' }}
+          style={{ opacity: passoAtual === 1 ? 0.3 : 1, cursor: passoAtual === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
         >
-          ← Passo Anterior
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          Passo Anterior
         </button>
-        
+
         {passoAtual < totalPassos ? (
-          <button className="primary" onClick={avancar} style={{ minWidth: '200px' }}>
-            Próximo Passo →
+          <button className="primary" onClick={avancar} style={{ minWidth: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+            Próximo Passo
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
           </button>
         ) : (
           <button className="primary" onClick={() => window.location.href = '/'} style={{ background: '#2c3e50', borderColor: '#2c3e50' }}>
