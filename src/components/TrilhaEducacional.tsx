@@ -141,8 +141,8 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
                 
                 {/* Botão transformado em Link de Download Nativo com ícone SVG */}
                 <a 
-                  href="/ebook-gc-planner.pdf" 
-                  download="Guia_Fases_Financeiras_GC.pdf"
+                  href="./Ebook/Finanças Pessoais - As 4 Fases da Vida Financeira (Gabriel Carrasco).pdf" 
+                  download="Guia As 4Fases Financeiras- Gabriel Carrasco.pdf"
                   className="primary" 
                   style={{ padding: '16px 32px', fontSize: '1.15rem', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', textDecoration: 'none', boxSizing: 'border-box', borderRadius: '8px' }}
                 >
