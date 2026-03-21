@@ -123,3 +123,75 @@
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* =========================================
+   NAVEGAÇÃO (BOTÕES AVANÇAR E VOLTAR)
+   ========================================= */
+.trilha-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 48px;
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+  gap: 16px;
+}
+
+.btn-nav-primary {
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+}
+
+.btn-nav-primary.btn-final {
+  background: #2c3e50;
+  border-color: #2c3e50;
+}
+
+.btn-nav-secundary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 14px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+}
+
+.btn-nav-secundary:hover:not(:disabled) {
+  background: var(--code-bg);
+  border-color: var(--text-h);
+  color: var(--text-h);
+}
+
+.btn-nav-secundary:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* =========================================
+   A MÁGICA PARA O CELULAR (RESPONSIVO)
+   ========================================= */
+@media (max-width: 768px) {
+  /* Os botões ficam um embaixo do outro no mobile */
+  .trilha-nav {
+    flex-direction: column-reverse; /* Coloca o botão "Próximo" acima do "Voltar" */
+    align-items: stretch; /* Faz os botões esticarem até o limite da tela */
+    padding-top: 20px;
+  }
+  
+  .btn-nav-primary, 
+  .btn-nav-secundary {
+    width: 100%;
+    min-width: 100%;
+    justify-content: center; /* Centraliza o texto e o ícone no celular */
+    padding: 16px;
+  }
+}
