@@ -55,6 +55,11 @@
 /* =========================================
    CONTEÚDO DA TRILHA (DENTRO DO CARD)
    ========================================= */
+   
+   h1 span {
+    display: inline !important; 
+  }
+   
 .step-content {
   background: var(--bg);
   padding: 32px;
@@ -323,4 +328,23 @@
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  h1 {
+    text-align: center !important;
+    font-size: 2.2rem !important;
+    line-height: 1.2 !important;
+  }
+  
+  /* 1. Tira o efeito escada e volta o "Trilha de" para a mesma linha */
+  h1 span {
+    display: inline !important; 
+  }
+  
+  /* 2. Empurra APENAS a palavra colorida para a linha de baixo */
+  h1 .text-accent {
+    display: block !important;
+    margin-top: 4px; /* Dá um respiro entre o "de" e o "Aprendizado" */
+  }
 }
