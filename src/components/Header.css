@@ -5,4 +5,5 @@
   padding: 24px 32px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+  font-size: 1vh;
 }

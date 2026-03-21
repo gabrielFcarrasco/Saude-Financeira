@@ -31,6 +31,7 @@
 
 .trilha-main-title {
   margin: 0;
+  display: block !important;
   color: var(--text-h);
   font-size: 3rem; /* Fonte grande no desktop */
   line-height: 1.1;
@@ -339,7 +340,7 @@
   
   /* 1. Tira o efeito escada e volta o "Trilha de" para a mesma linha */
   h1 span {
-    display: inline !important; 
+    display: block !important; 
   }
   
   /* 2. Empurra APENAS a palavra colorida para a linha de baixo */
