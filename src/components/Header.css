@@ -1,0 +1,8 @@
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
