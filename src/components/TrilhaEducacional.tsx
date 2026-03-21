@@ -73,7 +73,6 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
                       <span style={{ fontSize: '1.2rem', color: 'var(--accent)' }}>{card.titulo}</span>
                       <span style={{ fontSize: '0.95rem', color: 'var(--text)', fontWeight: 'normal' }}>{card.resumo}</span>
                     </div>
-                    {/* Ícone chevron SVG substituindo o emoji de seta */}
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expandedCard === idx ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.3s ease' }}>
                       <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
@@ -118,16 +117,14 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
             <p style={{ fontSize: '1.2rem', marginBottom: '32px', textAlign: 'center', color: 'var(--text)' }}>{dadosPasso.descricao}</p>
 
             <div className="ebook-container">
-              {/* Capa do Livro em CSS Puro */}
               <div className="ebook-cover">
                 <h3 style={{ color: '#fff', fontSize: '1.5rem', textAlign: 'center', margin: '0 0 16px 0', lineHeight: '1.2' }}>
                   As 4 Fases<br/><span style={{ color: 'var(--accent)' }}>Financeiras</span>
                 </h3>
-                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', textAlign: 'center', margin: 0 }}>ebook gratuito, das ferramentas que aprendi a usar.</p>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', textAlign: 'center', margin: 0 }}>O mapa definitivo da riqueza.</p>
                 <div style={{ position: 'absolute', bottom: '15px', right: '15px', color: 'var(--accent)' }}>GC</div>
               </div>
 
-              {/* Informações de Download */}
               <div style={{ flex: 1, textAlign: 'left' }}>
                 <h3 style={{ fontSize: '1.8rem', marginBottom: '12px', color: 'var(--text-h)' }}>O Guia Definitivo</h3>
                 <p style={{ fontSize: '1.1rem', lineHeight: '1.6', marginBottom: '24px', color: 'var(--text)' }}>
@@ -139,6 +136,7 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
                   <strong>4. Liberdade Financeira</strong> (O dinheiro trabalha por você)
                 </p>
                 
+                {/* Botão Premium de Download */}
                 <a 
                   href="/Ebook/Finanças Pessoais - As 4 Fases da Vida Financeira (Gabriel Carrasco).pdf" 
                   download="Guia_As_4Fases_Financeiras_Gabriel_Carrasco.pdf"
@@ -151,7 +149,6 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
                   </svg>
                   Baixar E-book Gratuito (PDF)
                 </a>
-                
               </div>
             </div>
           </div>
@@ -160,7 +157,7 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
       </div>
 
       {/* ================= NAVEGAÇÃO ================= */}
-    <div className="trilha-nav">
+      <div className="trilha-nav">
         <button 
           className="btn-nav-secundary"
           onClick={voltar} 
