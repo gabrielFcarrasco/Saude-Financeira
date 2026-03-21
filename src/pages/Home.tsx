@@ -11,12 +11,7 @@ export const Home = () => {
       <div className="home-glow" />
 
       <div className="home-content-wrapper">
-        <div className="home-badge">
-          <span className="pulse-dot"></span>
-          Versão 1.0 • Interativa
-        </div>
         
-        {/* A frase está agora em uma única div para facilitar o controle de quebra */}
         <h1 className="home-hero-title">
           Transforme sua Saúde Financeira de forma <br /> <span className="text-accent">Inteligente.</span>
         </h1>
