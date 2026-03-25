@@ -16,6 +16,7 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
     setExpandedCard(null);
     setPassoAtual((prev) => Math.min(prev + 1, totalPassos));
   };
+  
   const voltar = () => {
     setExpandedCard(null);
     setPassoAtual((prev) => Math.max(prev - 1, 1));
@@ -136,12 +137,13 @@ export const TrilhaEducacional: React.FC<TrilhaProps> = ({ perfil }) => {
                   <strong>4. Liberdade Financeira</strong> (O dinheiro trabalha por você)
                 </p>
                 
-                {/* Botão Premium de Download */}
+                {/* Botão Premium de Download Corrigido */}
                 <a 
                   href="/Ebook/Finanças Pessoais - As 4 Fases da Vida Financeira (Gabriel Carrasco).pdf" 
-                  download="Guia As 4 Fases Financeiras -
-                  Gabriel Carrasco.pdf"
+                  download="Guia_As_4Fases_Financeiras_Gabriel_Carrasco.pdf"
                   className="btn-download" 
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
