@@ -10,7 +10,7 @@ import { LancamentosTab } from '../components/tabs/LancamentosTab';
 import { OrcamentoTab } from '../components/tabs/OrcamentoTab';
 import { MetasTab } from '../components/tabs/MetasTab';
 import { QuitacaoTab } from '../components/tabs/QuitacaoTab';
-import { CasalTab } from '../components/tabs/CasalTab';
+import { CasalTab } from '../components/casal/CasalTab';
 import { AdminTab } from '../components/tabs/AdminTab';
 
 export const Planner = () => {

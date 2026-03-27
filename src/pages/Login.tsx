@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile, getAdditionalUserInfo } from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebase';
-import { enviarEmailBoasVindas } from '../services/email';
+import { enviarEmailBoasVindas, marcarConviteComoAceito } from '../services/email';
 import { addDoc, collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import './Home.css';
 
@@ -37,7 +37,11 @@ export const Login = () => {
         // DISPARA O E-MAIL DE BOAS-VINDAS! 🚀
         await enviarEmailBoasVindas(email, nome);
 
-        navigate('/quiz');
+        // A MÁGICA ACONTECE AQUI: Atualiza o status do convite no painel Admin!
+        await marcarConviteComoAceito(email);
+
+        // AGORA VAI DIRETO PARA O PAINEL!
+        navigate('/planner');
       }
     } catch (error: any) {
       if (error.code === 'auth/email-already-in-use') setErro('Esse email já está cadastrado.');
@@ -61,9 +65,15 @@ export const Login = () => {
       if (details?.isNewUser) {
         const nomeGoogle = result.user.displayName || 'Investidor';
         const emailGoogle = result.user.email || '';
+        
         // Dispara o e-mail de boas-vindas se for conta nova
         await enviarEmailBoasVindas(emailGoogle, nomeGoogle);
-        navigate('/quiz');
+        
+        // Atualiza o status do convite
+        await marcarConviteComoAceito(emailGoogle);
+
+        // AGORA VAI DIRETO PARA O PAINEL!
+        navigate('/planner');
       } else {
         navigate('/planner'); 
       }
@@ -149,7 +159,3 @@ export const Login = () => {
     </main>
   );
 };
-
-/**
- * Adiciona o e-mail na Lista VIP do banco e dispara o convite da plataforma.
- */
