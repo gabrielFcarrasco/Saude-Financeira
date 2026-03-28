@@ -524,3 +524,171 @@
     width: 100%;
   }
 }
+
+/* =========================================
+   ONBOARDING DO CASAL (TELA DE CONVITE)
+   ========================================= */
+
+/* Força o navegador a calcular o padding dentro da largura, evitando cortes na tela */
+.onboarding-wrapper, 
+.onboarding-wrapper * {
+  box-sizing: border-box;
+}
+
+.onboarding-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 70vh;
+  padding: 16px;
+  width: 100%;
+}
+
+.onboarding-card {
+  background: var(--code-bg);
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+  max-width: 800px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.onboarding-card-small {
+  max-width: 500px;
+  padding: 48px 40px;
+  text-align: center;
+}
+
+.onboarding-header {
+  padding: 40px 24px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 24px 24px 0 0;
+}
+
+.onboarding-header h1 {
+  color: var(--text-h);
+  margin: 0 0 16px 0;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.onboarding-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  padding: 40px;
+}
+
+.onboarding-form-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--bg);
+  padding: 32px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  width: 100%;
+}
+
+.onboarding-feature {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.onboarding-feature-text {
+  flex: 1; /* Garante que o texto não empurre o ícone para fora */
+}
+
+/* Nova classe para garantir que o input nunca vaze da tela */
+.onboarding-input {
+  width: 100%;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.onboarding-input:focus {
+  border-color: var(--accent);
+}
+
+.btn-onboarding-primary {
+  width: 100%;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-onboarding-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-onboarding-secondary {
+  width: 100%;
+  padding: 16px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.btn-onboarding-secondary:hover {
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.btn-group {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+/* 📱 REGRAS DE SEGURANÇA PARA CELULAR */
+@media (max-width: 768px) {
+  .onboarding-header {
+    padding: 32px 16px;
+  }
+  
+  .onboarding-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .onboarding-body {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding: 24px 16px;
+  }
+  
+  .onboarding-form-box {
+    padding: 24px 16px;
+  }
+  
+  .onboarding-card-small {
+    padding: 32px 20px;
+  }
+  
+  .btn-group {
+    flex-direction: column;
+    gap: 12px;
+  }
+}

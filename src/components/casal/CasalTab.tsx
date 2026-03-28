@@ -1,43 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../../services/firebase';
 import './CasalTab.css';
 
-// Importando todos os componentes separados
 import { HubScreen } from './HubScreen';
-import { CofreScreen } from './CofreScreen';
 import { OrcamentoLivreScreen } from './OrcamentoLivreScreen';
 import { MetasScreen } from './MetasScreen';
 import { EquilibrioScreen } from './EquilibrioScreen';
 import { Desafio200Screen } from './Desafio200Screen';
+import { OnboardingCasal } from './OnboardingCasal';
 
 export const CasalTab: React.FC = () => {
-  const [activeView, setActiveView] = useState<'hub' | 'cofre' | 'lazer' | 'metas' | 'equilibrio' | 'desafio200'>('hub');
+  const user = auth.currentUser;
   
-  const parceiro1 = "Gabriel";
-  const parceiro2 = "Vitória";
+  // Estados de Vínculo e Autenticação
+  const [statusVinculo, setStatusVinculo] = useState<'carregando' | 'sem_vinculo' | 'aguardando' | 'convite_recebido' | 'vinculado'>('carregando');
+  const [emailConvite, setEmailConvite] = useState('');
+  const [conviteId, setConviteId] = useState<string | null>(null);
+  const [casalId, setCasalId] = useState<string | null>(null);
+  
+  // Nomes dinâmicos vindos do banco
+  const [parceiro1, setParceiro1] = useState("Parceiro 1");
+  const [parceiro2, setParceiro2] = useState("Parceiro 2");
 
-  // Estados Globais
-  const [contribuicoes, setContribuicoes] = useState([{ id: 1, mesData: 'Mar/24', p1Contr: 500, p2Contr: 500 }]);
-  const [saidas, setSaidas] = useState([{ id: 1, titulo: "Jantar Outback", data: "12/Abr", estimado: 250, status: 'planejado' }]);
-  const [metas, setMetas] = useState([
-  { 
-    id: 1, 
-    titulo: 'Fundo do Noivado', 
-    atual: 4500, 
-    alvo: 15000,
-    historico: [
-      { id: 101, data: '20/Mar', valor: 500, descricao: 'Aporte Mensal' },
-      { id: 102, data: '22/Mar', valor: 50, descricao: 'Sobra do Orçamento Livre' }
-    ]
-  }
-]);
-  const [despesasRapidas, setDespesasRapidas] = useState([{ id: 1, desc: 'Ingressos', pagoPor: parceiro1, valor: 90, data: '20/Mar' }]);
-  const [desafioP1, setDesafioP1] = useState<number[]>([1, 2, 5, 10]); 
-  const [desafioP2, setDesafioP2] = useState<number[]>([10, 20]);      
+  const [activeView, setActiveView] = useState<'hub' | 'cofre' | 'lazer' | 'metas' | 'equilibrio' | 'desafio200'>('hub');
 
-  // Estados Form Lazer
-  const [limiteMensalLazer, setLimiteMensalLazer] = useState(1000.00);
+  // Estados Financeiros (Agora iniciam vazios)
+  const [contribuicoes, setContribuicoes] = useState<any[]>([]);
+  const [saidas, setSaidas] = useState<any[]>([]);
+  const [metas, setMetas] = useState<any[]>([]);
+  const [despesasRapidas, setDespesasRapidas] = useState<any[]>([]);
+  const [desafioP1, setDesafioP1] = useState<number[]>([]); 
+  const [desafioP2, setDesafioP2] = useState<number[]>([]);      
+  const [limiteMensalLazer, setLimiteMensalLazer] = useState(0);
+
+  // Estados de Interface dos Formulários
   const [editandoLimite, setEditandoLimite] = useState(false);
-  const [novoLimiteInput, setNovoLimiteInput] = useState('1000');
+  const [novoLimiteInput, setNovoLimiteInput] = useState('');
   const [simuladorAberto, setSimuladorAberto] = useState(false);
   const [simTitulo, setSimTitulo] = useState('');
   const [simData, setSimData] = useState('');
@@ -45,26 +44,179 @@ export const CasalTab: React.FC = () => {
   const [simItems, setSimItems] = useState(initialSimItems);
   const [modalConcluir, setModalConcluir] = useState<any | null>(null);
   const [valorReal, setValorReal] = useState('');
-  const [quemPagou, setQuemPagou] = useState(parceiro1);
+  const [quemPagou, setQuemPagou] = useState('');
   const [sobraDetectada, setSobraDetectada] = useState(0);
-
-  // Estados Form Cofre
   const [novoDepositoAberto, setNovoDepositoAberto] = useState(false);
   const [depMes, setDepMes] = useState('');
   const [depP1, setDepP1] = useState('');
   const [depP2, setDepP2] = useState('');
 
-  const formatMoney = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  // ==========================================
+  // 1. ESCUTA DE VÍNCULO (CASAL OU CONVITE)
+  // ==========================================
+  useEffect(() => {
+    if (!user) return;
+
+    // Escuta a coleção de casais para ver se o usuário já está vinculado
+    const qCasal = query(collection(db, 'casais'), where('membros', 'array-contains', user.uid));
+    const unsubCasal = onSnapshot(qCasal, (snapshot) => {
+      if (!snapshot.empty) {
+        const dadosCasal = snapshot.docs[0].data();
+        setCasalId(snapshot.docs[0].id);
+        setParceiro1(dadosCasal.nomeP1 || "Parceiro 1");
+        setParceiro2(dadosCasal.nomeP2 || "Parceiro 2");
+        setLimiteMensalLazer(dadosCasal.limiteLazer || 1000);
+        setStatusVinculo('vinculado');
+      } else {
+        // Se não tem casal, procura convites
+        verificarConvites();
+      }
+    });
+
+    const verificarConvites = () => {
+      // Verifica se RECEBEU convite
+      const qRecebidos = query(collection(db, 'convites'), where('emailPara', '==', user.email), where('status', '==', 'pendente'));
+      onSnapshot(qRecebidos, (snap) => {
+        if (!snap.empty) {
+          setConviteId(snap.docs[0].id);
+          setParceiro1(snap.docs[0].data().deNome);
+          setStatusVinculo('convite_recebido');
+        } else {
+          // Verifica se ENVIOU convite
+          const qEnviados = query(collection(db, 'convites'), where('deId', '==', user.uid), where('status', '==', 'pendente'));
+          onSnapshot(qEnviados, (snapEnv) => {
+            if (!snapEnv.empty) {
+              setEmailConvite(snapEnv.docs[0].data().emailPara);
+              setConviteId(snapEnv.docs[0].id);
+              setStatusVinculo('aguardando');
+            } else {
+              setStatusVinculo('sem_vinculo');
+            }
+          });
+        }
+      });
+    };
+
+    return () => unsubCasal();
+  }, [user]);
 
   // ==========================================
-  // CÁLCULOS TÉCNICOS (Ficam antes do screenProps)
+  // 2. ESCUTA DOS DADOS FINANCEIROS DO CASAL
   // ==========================================
+  useEffect(() => {
+    if (statusVinculo !== 'vinculado' || !casalId) return;
+
+    // Escuta Contribuições do Cofre
+    const unsubContr = onSnapshot(query(collection(db, 'casais', casalId, 'contribuicoes')), (snap) => {
+      setContribuicoes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Escuta Despesas Rápidas
+    const unsubDespesas = onSnapshot(query(collection(db, 'casais', casalId, 'despesas_rapidas')), (snap) => {
+      setDespesasRapidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Escuta Saídas Planejadas (Lazer)
+    const unsubSaidas = onSnapshot(query(collection(db, 'casais', casalId, 'saidas')), (snap) => {
+      setSaidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Escuta Metas
+    const unsubMetas = onSnapshot(query(collection(db, 'casais', casalId, 'metas')), (snap) => {
+      setMetas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Escuta Desafio 200
+    const unsubDesafio = onSnapshot(doc(db, 'casais', casalId, 'desafio200', 'progresso'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setDesafioP1(data.p1 || []);
+        setDesafioP2(data.p2 || []);
+      }
+    });
+
+    return () => {
+      unsubContr();
+      unsubDespesas();
+      unsubSaidas();
+      unsubMetas();
+      unsubDesafio();
+    };
+  }, [statusVinculo, casalId]);
+
+  // ==========================================
+  // AÇÕES DE CONVITE (FIREBASE)
+  // ==========================================
+  const handleEnviarConvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailConvite || !user) return;
+    
+    try {
+      await addDoc(collection(db, 'convites'), {
+        deId: user.uid,
+        deNome: user.displayName || "Seu Parceiro",
+        emailPara: emailConvite.toLowerCase(),
+        status: 'pendente',
+        dataEnvio: serverTimestamp()
+      });
+      setStatusVinculo('aguardando');
+    } catch (error) {
+      console.error("Erro ao enviar convite:", error);
+    }
+  };
+
+  const handleAceitarConvite = async () => {
+    if (!user || !conviteId) return;
+    
+    try {
+      // 1. Atualiza o status do convite
+      await updateDoc(doc(db, 'convites', conviteId), { status: 'aceito' });
+      
+      // 2. Opcional: Aqui você pode disparar uma Cloud Function ou criar o doc do casal direto
+      // Exemplo de criação direta do casal:
+      const novoCasal = await addDoc(collection(db, 'casais'), {
+        membros: [user.uid, "ID_DO_PARCEIRO_QUE_ENVIOU"], // Ideal pegar do convite
+        nomeP1: parceiro1, // Quem convidou
+        nomeP2: user.displayName || "Parceiro 2", // Quem aceitou
+        limiteLazer: 1000,
+        dataCriacao: serverTimestamp()
+      });
+      
+      setCasalId(novoCasal.id);
+      setStatusVinculo('vinculado');
+    } catch (error) {
+      console.error("Erro ao aceitar convite:", error);
+    }
+  };
+
+  const handleRecusarConvite = async () => {
+    if (!conviteId) return;
+    try {
+      await deleteDoc(doc(db, 'convites', conviteId));
+      setStatusVinculo('sem_vinculo');
+      setEmailConvite('');
+    } catch (error) {
+      console.error("Erro ao recusar convite:", error);
+    }
+  };
+
+  const handleCancelarConviteEnviado = async () => {
+    if (!conviteId) return;
+    try {
+      await deleteDoc(doc(db, 'convites', conviteId));
+      setStatusVinculo('sem_vinculo');
+      setEmailConvite('');
+    } catch (error) {
+      console.error("Erro ao cancelar convite:", error);
+    }
+  };
+
+  const formatMoney = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
   const totalDesafioP1 = desafioP1.reduce((acc, val) => acc + (Number(val) || 0), 0);
   const totalDesafioP2 = desafioP2.reduce((acc, val) => acc + (Number(val) || 0), 0);
   const totalDepositosP1 = contribuicoes.reduce((acc, curr) => acc + (Number(curr.p1Contr) || 0), 0);
   const totalDepositosP2 = contribuicoes.reduce((acc, curr) => acc + (Number(curr.p2Contr) || 0), 0);
-
-  // O Valor Real que vocês possuem hoje
   const totalCofre = totalDesafioP1 + totalDesafioP2 + totalDepositosP1 + totalDepositosP2;
 
   const icons = {
@@ -73,30 +225,117 @@ export const CasalTab: React.FC = () => {
     cofre: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>,
     lazer: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>,
     metas: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>,
-    balanca: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18"></path><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 7l-9 4"></path><path d="M12 7l9 4"></path></svg>,
-    calendario: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>,
-    trash: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
-    check: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
-    edit: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
-    checkBold: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
-    trophy: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10"></path><path d="M17 4v8a5 5 0 0 1-10 0V4"></path><path d="M4 9h3"></path><path d="M17 9h3"></path></svg>
+    balanca: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18"></path><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 7l-9 4"></path><path d="M12 7l9 4"></path></svg>
   };
 
   const screenProps = {
     parceiro1, parceiro2, activeView, setActiveView, formatMoney, icons,
     contribuicoes, setContribuicoes, saidas, setSaidas, metas, setMetas, 
     despesasRapidas, setDespesasRapidas, desafioP1, setDesafioP1, desafioP2, setDesafioP2,
-    totalCofre,
+    totalCofre, casalId, // Passando o casalId para os filhos poderem salvar os dados corretamente
     limiteMensalLazer, setLimiteMensalLazer, editandoLimite, setEditandoLimite, novoLimiteInput, setNovoLimiteInput,
     simuladorAberto, setSimuladorAberto, simTitulo, setSimTitulo, simData, setSimData, simItems, setSimItems, initialSimItems,
     modalConcluir, setModalConcluir, valorReal, setValorReal, quemPagou, setQuemPagou, sobraDetectada, setSobraDetectada,
     novoDepositoAberto, setNovoDepositoAberto, depMes, setDepMes, depP1, setDepP1, depP2, setDepP2, 
   };
 
+  // ==========================================
+  // RENDERIZAÇÃO
+  // ==========================================
+  
+  if (statusVinculo === 'carregando') {
+    return <div style={{ textAlign: 'center', marginTop: '100px', color: 'var(--text)' }}>Buscando informações do casal...</div>;
+  }
+
+  // AQUI ENTRA O COMPONENTE NOVO
+  if (statusVinculo !== 'vinculado') {
+    return (
+      <OnboardingCasal 
+        statusVinculo={statusVinculo as any} 
+        emailConvite={emailConvite}
+        setEmailConvite={setEmailConvite}
+        parceiro1={parceiro1}
+        onEnviarConvite={handleEnviarConvite}
+        onAceitarConvite={handleAceitarConvite}
+        onRecusarConvite={handleRecusarConvite}
+        onCancelarConvite={handleCancelarConviteEnviado}
+      />
+    );
+  }2
+
+  if (statusVinculo !== 'vinculado') {
+    return (
+      <div className="casal-layout-container" style={{ maxWidth: '600px', margin: '40px auto', textAlign: 'center' }}>
+        
+        {statusVinculo === 'sem_vinculo' && (
+          <div style={{ background: 'var(--code-bg)', padding: '40px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.04)' }}>
+            <div style={{ width: 64, height: 64, background: 'rgba(139, 92, 246, 0.08)', color: 'var(--accent)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+            <h2 style={{ color: 'var(--text-h)', margin: '0 0 16px 0' }}>Gestão Financeira a Dois</h2>
+            <p style={{ color: 'var(--text)', marginBottom: '32px', lineHeight: '1.6' }}>
+              Acompanhem o saldo conjunto, planejem despesas de lazer e alcancem suas metas muito mais rápido com uma visão unificada.
+            </p>
+            
+            <form onSubmit={handleEnviarConvite} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <input 
+                type="email" 
+                placeholder="E-mail do seu parceiro(a)" 
+                value={emailConvite}
+                onChange={e => setEmailConvite(e.target.value)}
+                style={{ width: '100%', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', fontSize: '1rem' }}
+                required
+              />
+              <button type="submit" style={{ width: '100%', padding: '16px', borderRadius: '8px', background: 'var(--accent)', color: '#fff', border: 'none', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                Enviar Convite
+              </button>
+            </form>
+          </div>
+        )}
+
+        {statusVinculo === 'aguardando' && (
+          <div style={{ background: 'var(--code-bg)', padding: '40px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.04)' }}>
+            <div style={{ width: 64, height: 64, background: 'rgba(59, 130, 246, 0.08)', color: '#3b82f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <h2 style={{ color: 'var(--text-h)', margin: '0 0 16px 0' }}>Convite Enviado!</h2>
+            <p style={{ color: 'var(--text)', marginBottom: '32px', lineHeight: '1.6' }}>
+              Estamos aguardando <strong>{emailConvite}</strong> aceitar o convite para liberar o painel de vocês.
+            </p>
+            <button onClick={handleCancelarConviteEnviado} style={{ padding: '12px 24px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer', fontWeight: 'bold' }}>
+              Cancelar Convite
+            </button>
+          </div>
+        )}
+
+        {statusVinculo === 'convite_recebido' && (
+          <div style={{ background: 'var(--code-bg)', padding: '40px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.04)' }}>
+            <div style={{ width: 64, height: 64, background: 'rgba(16, 185, 129, 0.08)', color: '#10b981', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <h2 style={{ color: 'var(--text-h)', margin: '0 0 16px 0' }}>Você tem um convite!</h2>
+            <p style={{ color: 'var(--text)', marginBottom: '32px', lineHeight: '1.6' }}>
+              <strong>{parceiro1}</strong> convidou você para compartilhar o planejamento financeiro.
+            </p>
+            
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <button onClick={handleRecusarConvite} style={{ flex: 1, padding: '16px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer', fontWeight: 'bold' }}>
+                Recusar
+              </button>
+              <button onClick={handleAceitarConvite} style={{ flex: 1, padding: '16px', borderRadius: '8px', background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+                Aceitar Convite
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Se chegou aqui, está vinculado!
   switch (activeView) {
     case 'hub': return <HubScreen {...screenProps} />;
     case 'desafio200': return <Desafio200Screen {...screenProps} />;
-    case 'cofre': return <CofreScreen {...screenProps} />;
     case 'metas': return <MetasScreen {...screenProps} />;
     case 'equilibrio': return <EquilibrioScreen {...screenProps} />;
     case 'lazer': return <OrcamentoLivreScreen {...screenProps} />;

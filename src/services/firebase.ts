@@ -2,6 +2,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { GoogleAuthProvider } from 'firebase/auth';
+// 1. Importando as ferramentas do App Check
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 // O Vite usa import.meta.env para ler o arquivo .env
 const firebaseConfig = {
@@ -15,6 +17,15 @@ const firebaseConfig = {
 
 // Inicializa o Firebase
 const app = initializeApp(firebaseConfig);
+
+// 2. Inicializa a blindagem do App Check (reCAPTCHA v3)
+// A verificação (typeof window) garante que isso só rode no navegador do usuário
+if (typeof window !== 'undefined') {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+    isTokenAutoRefreshEnabled: true // O Firebase renova o selo de segurança sozinho
+  });
+}
 
 // Exporta os serviços que vamos usar nas nossas telas
 export const db = getFirestore(app);

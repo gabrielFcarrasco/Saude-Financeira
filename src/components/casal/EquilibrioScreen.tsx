@@ -1,9 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { doc, writeBatch } from 'firebase/firestore';
+import { db } from '../../services/firebase';
 
 export const EquilibrioScreen = ({ 
-  setActiveView, despesasRapidas, setDespesasRapidas, parceiro1, parceiro2, formatMoney, icons 
+  setActiveView, casalId, despesasRapidas, parceiro1, parceiro2, formatMoney, icons 
 }: any) => {
   
+  const [isProcessando, setIsProcessando] = useState(false);
+
+  // ==========================================
+  // LÓGICA DE ZERAR AUTOMATICAMENTE NO MÊS NOVO
+  // ==========================================
+  useEffect(() => {
+    if (!casalId || despesasRapidas.length === 0) return;
+
+    const mesAtual = new Date().getMonth();
+    const anoAtual = new Date().getFullYear();
+
+    // Verifica se há algum gasto com data de criação de um mês/ano anterior
+    const temGastoAntigo = despesasRapidas.some((gasto: any) => {
+      // Se não tiver createdAt, ignora para não quebrar
+      if (!gasto.createdAt) return false; 
+      
+      // Converte o Timestamp do Firebase para uma Data do JavaScript
+      const dataGasto = gasto.createdAt.toDate ? gasto.createdAt.toDate() : new Date();
+      
+      return dataGasto.getMonth() !== mesAtual || dataGasto.getFullYear() !== anoAtual;
+    });
+
+    // Se detectou gastos de meses passados, zera tudo silenciosamente
+    if (temGastoAntigo) {
+      const zerarAutomatico = async () => {
+        try {
+          const batch = writeBatch(db);
+          despesasRapidas.forEach((gasto: any) => {
+            const docRef = doc(db, 'casais', casalId, 'despesas_rapidas', gasto.id);
+            batch.delete(docRef);
+          });
+          await batch.commit();
+        } catch (error) {
+          console.error("Erro na limpeza automática da balança:", error);
+        }
+      };
+      
+      zerarAutomatico();
+    }
+  }, [despesasRapidas, casalId]);
+
+
   // Cálculos de Gastos
   const gastosP1 = despesasRapidas
     .filter((d: any) => d.pagoPor === parceiro1)
@@ -18,13 +62,30 @@ export const EquilibrioScreen = ({
   const quemEstaDevendo = gastosP1 > gastosP2 ? parceiro2 : parceiro1;
   const quemGastouMais = gastosP1 > gastosP2 ? parceiro1 : parceiro2;
 
-  // Cálculo da posição da balança (50% é o centro perfeito)
-  // Se P1 gastou tudo, vai para 100%. Se P2 gastou tudo, vai para 0%.
   const posicaoBalanca = total > 0 ? (gastosP1 / total) * 100 : 50;
 
-  const handleZerarBalanca = () => {
+  // Função Manual de Zerar
+  const handleZerarBalanca = async () => {
+    if (!casalId || despesasRapidas.length === 0) return;
+    
     if (window.confirm(`Deseja zerar o histórico de gastos? Isso marcará o equilíbrio atual como resolvido.`)) {
-      setDespesasRapidas([]);
+      try {
+        setIsProcessando(true);
+        const batch = writeBatch(db);
+        
+        despesasRapidas.forEach((gasto: any) => {
+          const docRef = doc(db, 'casais', casalId, 'despesas_rapidas', gasto.id);
+          batch.delete(docRef);
+        });
+
+        await batch.commit();
+
+      } catch (error) {
+        console.error("Erro ao zerar a balança:", error);
+        alert("Ocorreu um erro ao tentar zerar a balança. Tente novamente.");
+      } finally {
+        setIsProcessando(false);
+      }
     }
   };
 
@@ -33,7 +94,7 @@ export const EquilibrioScreen = ({
       
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <button className="btn-voltar" onClick={() => setActiveView('hub')} style={{ margin: 0 }}>
+        <button className="btn-voltar" onClick={() => setActiveView('hub')} style={{ margin: 0 }} disabled={isProcessando}>
           {icons.voltar} Voltar
         </button>
         <div style={{ textAlign: 'right' }}>
@@ -43,7 +104,7 @@ export const EquilibrioScreen = ({
       </div>
 
       {/* CARD PRINCIPAL DA BALANÇA */}
-      <div className="hub-balance-card" style={{ padding: '32px', position: 'relative', overflow: 'hidden' }}>
+      <div className="hub-balance-card" style={{ padding: '32px', position: 'relative', overflow: 'hidden', opacity: isProcessando ? 0.7 : 1 }}>
         <span className="hub-balance-label">Diferença Atual</span>
         <h1 style={{ fontSize: '3.5rem', color: 'var(--text-h)', margin: '8px 0' }}>{formatMoney(diferenca)}</h1>
         <p style={{ color: 'var(--text)', marginBottom: '32px' }}>
@@ -95,13 +156,14 @@ export const EquilibrioScreen = ({
           </div>
         </div>
 
-        {/* BOTÃO ZERAR */}
+        {/* BOTÃO ZERAR MANUAL */}
         {diferenca > 0 && (
           <button 
             onClick={handleZerarBalanca}
-            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem' }}
+            disabled={isProcessando}
+            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 16px', borderRadius: '8px', cursor: isProcessando ? 'not-allowed' : 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
           >
-            Zerar Balança
+            {isProcessando ? 'Zerando...' : 'Zerar Balança'}
           </button>
         )}
       </div>
@@ -114,9 +176,22 @@ export const EquilibrioScreen = ({
         borderRadius: '16px',
         display: 'flex',
         alignItems: 'center',
-        gap: '16px'
+        gap: '16px',
+        marginBottom: '32px'
       }}>
-        <div style={{ fontSize: '1.5rem' }}>💡</div>
+        <div style={{ color: '#3b82f6', flexShrink: 0 }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="M4 12H2"></path>
+            <path d="M22 12h-2"></path>
+            <path d="M19.07 4.93l-1.41 1.41"></path>
+            <path d="M6.34 17.66l-1.41 1.41"></path>
+            <path d="M19.07 19.07l-1.41-1.41"></path>
+            <path d="M6.34 6.34l-1.41 1.41"></path>
+          </svg>
+        </div>
         <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.5' }}>
           {diferenca < 20 
             ? "Vocês estão mandando muito bem! Que tal um sorvete para comemorar esse equilíbrio?" 
@@ -133,7 +208,7 @@ export const EquilibrioScreen = ({
             <div key={gasto.id} className="extrato-item" style={{ borderLeft: `4px solid ${gasto.pagoPor === parceiro1 ? 'var(--accent)' : '#10b981'}` }}>
               <div className="extrato-info" style={{ paddingLeft: '12px' }}>
                 <span className="extrato-titulo">{gasto.desc}</span>
-                <span className="extrato-data">{gasto.data} • Pago por <strong>{gasto.pagoPor}</strong></span>
+                <span className="extrato-data">{gasto.data} • Pago por <strong style={{color: gasto.pagoPor === parceiro1 ? 'var(--accent)' : '#10b981'}}>{gasto.pagoPor}</strong></span>
               </div>
               <div className="extrato-valor" style={{ color: 'var(--text-h)' }}>
                 {formatMoney(gasto.valor)}

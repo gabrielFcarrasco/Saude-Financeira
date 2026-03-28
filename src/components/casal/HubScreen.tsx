@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../services/firebase'; // Ajuste o caminho se necessário
 import { frases, versiculos } from './mensagens'; 
 
 export const HubScreen = ({ 
   setActiveView, parceiro1, parceiro2, formatMoney, icons,
+  casalId, // Novo prop que o CasalTab está passando
   contribuicoes, setContribuicoes, despesasRapidas, 
   desafioP1, desafioP2, novoDepositoAberto, setNovoDepositoAberto,
   depMes, setDepMes, depP1, setDepP1, depP2, setDepP2
@@ -19,13 +22,12 @@ export const HubScreen = ({
     return frases[Math.floor(Math.random() * frases.length)];
   });
 
-  // Separa o texto do versículo da sua referência (ex: "Texto" e "Mateus 6:21")
   const [textoVersiculo, refVersiculo] = versiculoDia.split(' - ');
 
   const totalDesafioP1 = desafioP1.reduce((a: number, b: number) => a + b, 0);
   const totalDesafioP2 = desafioP2.reduce((a: number, b: number) => a + b, 0);
-  const totalDepositosP1 = contribuicoes.reduce((acc: number, curr: any) => acc + curr.p1Contr, 0);
-  const totalDepositosP2 = contribuicoes.reduce((acc: number, curr: any) => acc + curr.p2Contr, 0);
+  const totalDepositosP1 = contribuicoes.reduce((acc: number, curr: any) => acc + (Number(curr.p1Contr) || 0), 0);
+  const totalDepositosP2 = contribuicoes.reduce((acc: number, curr: any) => acc + (Number(curr.p2Contr) || 0), 0);
   
   const totalP1 = totalDepositosP1 + totalDesafioP1;
   const totalP2 = totalDepositosP2 + totalDesafioP2;
@@ -34,42 +36,58 @@ export const HubScreen = ({
   const percP1 = totalCofre > 0 ? (totalP1 / totalCofre) * 100 : 50;
   const percP2 = totalCofre > 0 ? (totalP2 / totalCofre) * 100 : 50;
 
+  // Unifica e ordena as movimentações pela data de criação real do Firebase
   const extratoUnificado = [
     ...contribuicoes.map((c: any) => ({
       id: c.id,
       tipo: 'entrada',
       titulo: 'Depósito',
       data: c.mesData,
-      valor: c.p1Contr + c.p2Contr,
-      detalhe: `${c.local ? `${c.local} | ` : ''}${parceiro1}: ${formatMoney(c.p1Contr)} - ${parceiro2}: ${formatMoney(c.p2Contr)}`
+      valor: Number(c.p1Contr || 0) + Number(c.p2Contr || 0),
+      detalhe: `${c.local ? `${c.local} | ` : ''}${parceiro1}: ${formatMoney(c.p1Contr || 0)} - ${parceiro2}: ${formatMoney(c.p2Contr || 0)}`,
+      timestamp: c.createdAt?.toMillis() || 0
     })),
     ...despesasRapidas.map((d: any) => ({
       id: d.id,
       tipo: 'saida',
       titulo: d.desc,
       data: d.data,
-      valor: d.valor,
-      detalhe: `Pago por ${d.pagoPor}`
+      valor: Number(d.valor || 0),
+      detalhe: `Pago por ${d.pagoPor}`,
+      timestamp: d.createdAt?.toMillis() || 0
     }))
-  ].sort((a, b) => b.id - a.id);
+  ].sort((a, b) => b.timestamp - a.timestamp); // Agora a ordenação funciona com os dados do Firebase
 
   const extratoExibido = mostrarExtratoCompleto ? extratoUnificado : extratoUnificado.slice(0, 3);
 
-  const handleSalvar = () => {
+  // Função assíncrona conectada ao Firebase
+  const handleSalvar = async () => {
     if (!depP1 && !depP2) return;
-    setContribuicoes([{ 
-      id: Date.now(), 
-      mesData: depMes || 'Mês Atual', 
-      local: depLocal || 'Não informado',
-      p1Contr: Number(depP1 || 0), 
-      p2Contr: Number(depP2 || 0) 
-    }, ...contribuicoes]);
-    
-    setNovoDepositoAberto(false); 
-    setDepMes(''); 
-    setDepP1(''); 
-    setDepP2('');
-    setDepLocal('');
+    if (!casalId) {
+      alert("Erro de conexão. Vínculo do casal não encontrado.");
+      return;
+    }
+
+    try {
+      // Salva direto na nuvem. O useEffect do CasalTab vai atualizar a tela sozinho!
+      await addDoc(collection(db, 'casais', casalId, 'contribuicoes'), {
+        mesData: depMes || 'Mês Atual',
+        local: depLocal || 'Não informado',
+        p1Contr: Number(depP1 || 0),
+        p2Contr: Number(depP2 || 0),
+        createdAt: serverTimestamp() // Cria uma data oficial do servidor do Google
+      });
+
+      // Limpa o formulário apenas se der sucesso
+      setNovoDepositoAberto(false); 
+      setDepMes(''); 
+      setDepP1(''); 
+      setDepP2('');
+      setDepLocal('');
+    } catch (error) {
+      console.error("Erro ao salvar depósito:", error);
+      alert("Houve um erro ao salvar seu depósito. Tente novamente.");
+    }
   };
 
   return (
@@ -87,7 +105,7 @@ export const HubScreen = ({
         alignItems: 'flex-start'
       }}>
         {/* Ícone de Aspas */}
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--border)" opacity="0.5">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--border)" opacity="0.5" flexShrink="0">
           <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
         </svg>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -172,11 +190,11 @@ export const HubScreen = ({
       {novoDepositoAberto && (
         <div className="simulator-box animate-fade-in" style={{ padding: '24px' }}>
           <h4 style={{ margin: '0 0 16px 0', color: 'var(--accent)' }}>Registrar Depósito</h4>
-          <div className="simulator-row"><span>Mês/Ref.</span><input type="text" value={depMes} onChange={e => setDepMes(e.target.value)} placeholder="Ex: Março" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
-          <div className="simulator-row"><span>Instituição/Local</span><input type="text" value={depLocal} onChange={e => setDepLocal(e.target.value)} placeholder="Ex: Poupança, Nubank" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
-          <div className="simulator-row"><span>Valor {parceiro1}</span><input type="number" value={depP1} onChange={e => setDepP1(e.target.value)} placeholder="0,00" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
-          <div className="simulator-row"><span>Valor {parceiro2}</span><input type="number" value={depP2} onChange={e => setDepP2(e.target.value)} placeholder="0,00" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
-          <button className="primary" onClick={handleSalvar} style={{ width: '100%', marginTop: '16px', padding: '14px' }}>Salvar</button>
+          <div className="simulator-row"><span>Mês/Ref.</span><input type="text" value={depMes} onChange={e => setDepMes(e.target.value)} placeholder="Ex: Março" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
+          <div className="simulator-row"><span>Instituição/Local</span><input type="text" value={depLocal} onChange={e => setDepLocal(e.target.value)} placeholder="Ex: Poupança, Nubank" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
+          <div className="simulator-row"><span>Valor {parceiro1}</span><input type="number" value={depP1} onChange={e => setDepP1(e.target.value)} placeholder="0,00" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
+          <div className="simulator-row"><span>Valor {parceiro2}</span><input type="number" value={depP2} onChange={e => setDepP2(e.target.value)} placeholder="0,00" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
+          <button className="primary" onClick={handleSalvar} style={{ width: '100%', marginTop: '16px', padding: '14px', borderRadius: '8px', border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Salvar</button>
         </div>
       )}
 
@@ -186,13 +204,13 @@ export const HubScreen = ({
         alignItems: 'center',
         gap: '12px',
         borderLeft: '3px solid #8b5cf6',
-        background: 'rgba(139, 92, 246, 0.05)', // Fundo roxo bem transparente
+        background: 'rgba(139, 92, 246, 0.05)', 
         padding: '16px',
         marginBottom: '24px',
         borderRadius: '0 8px 8px 0',
       }}>
         {/* Ícone de Lâmpada / Insight */}
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" flexShrink="0">
           <circle cx="12" cy="12" r="4"></circle>
           <path d="M12 2v2"></path>
           <path d="M12 20v2"></path>
