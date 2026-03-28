@@ -1,4 +1,26 @@
 /* =========================================
+   PALETA MODERNA FINTECH (LIGHT MODE)
+   ========================================= */
+:root {
+  /* Fundo principal da tela: Um cinza super claro, quase gelo */
+  --bg: #f8fafc; 
+  
+  /* Fundo dos cartões: Branco puro para destacar do fundo */
+  --code-bg: #ffffff; 
+  
+  /* Textos secundários e descrições: Cinza médio e legível */
+  --text: #64748b; 
+  
+  /* Títulos e valores em dinheiro: Azul marinho quase preto (traz muita elegância) */
+  --text-h: #0f172a; 
+  
+  /* Bordas divisórias: Cinza bem claro e sutil */
+  --border: #e2e8f0; 
+  
+  /* Cor de destaque principal (Roxo vibrante para botões e detalhes) */
+  --accent: #8b5cf6; 
+}
+/* =========================================
    ESTILOS EXCLUSIVOS - RENDA CONJUNTA
    ========================================= */
 

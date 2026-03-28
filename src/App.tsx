@@ -3,7 +3,7 @@ import { Route, BrowserRouter as Router, Routes, useLocation, Navigate } from 'r
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './services/firebase';
 
-import { Header } from './components/Header';
+import { Header } from './components/test/Header';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login'; // Importamos a nova página
 import { Planner } from './pages/Planner';

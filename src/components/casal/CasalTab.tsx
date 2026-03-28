@@ -18,7 +18,18 @@ export const CasalTab: React.FC = () => {
   // Estados Globais
   const [contribuicoes, setContribuicoes] = useState([{ id: 1, mesData: 'Mar/24', p1Contr: 500, p2Contr: 500 }]);
   const [saidas, setSaidas] = useState([{ id: 1, titulo: "Jantar Outback", data: "12/Abr", estimado: 250, status: 'planejado' }]);
-  const [metas, setMetas] = useState([{ id: 1, titulo: 'Fundo do Noivado', atual: 4500, alvo: 15000 }]);
+  const [metas, setMetas] = useState([
+  { 
+    id: 1, 
+    titulo: 'Fundo do Noivado', 
+    atual: 4500, 
+    alvo: 15000,
+    historico: [
+      { id: 101, data: '20/Mar', valor: 500, descricao: 'Aporte Mensal' },
+      { id: 102, data: '22/Mar', valor: 50, descricao: 'Sobra do Orçamento Livre' }
+    ]
+  }
+]);
   const [despesasRapidas, setDespesasRapidas] = useState([{ id: 1, desc: 'Ingressos', pagoPor: parceiro1, valor: 90, data: '20/Mar' }]);
   const [desafioP1, setDesafioP1] = useState<number[]>([1, 2, 5, 10]); 
   const [desafioP2, setDesafioP2] = useState<number[]>([10, 20]);      

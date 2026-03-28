@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { frases, versiculos } from './mensagens'; 
 
 export const HubScreen = ({ 
   setActiveView, parceiro1, parceiro2, formatMoney, icons,
@@ -8,6 +9,18 @@ export const HubScreen = ({
 }: any) => {
 
   const [mostrarExtratoCompleto, setMostrarExtratoCompleto] = useState(false);
+  const [depLocal, setDepLocal] = useState('');
+  
+  const [versiculoDia] = useState(() => {
+    return versiculos[Math.floor(Math.random() * versiculos.length)];
+  });
+
+  const [fraseDia] = useState(() => {
+    return frases[Math.floor(Math.random() * frases.length)];
+  });
+
+  // Separa o texto do versículo da sua referência (ex: "Texto" e "Mateus 6:21")
+  const [textoVersiculo, refVersiculo] = versiculoDia.split(' - ');
 
   const totalDesafioP1 = desafioP1.reduce((a: number, b: number) => a + b, 0);
   const totalDesafioP2 = desafioP2.reduce((a: number, b: number) => a + b, 0);
@@ -25,10 +38,10 @@ export const HubScreen = ({
     ...contribuicoes.map((c: any) => ({
       id: c.id,
       tipo: 'entrada',
-      titulo: 'Aporte Conjunto',
+      titulo: 'Depósito',
       data: c.mesData,
       valor: c.p1Contr + c.p2Contr,
-      detalhe: `${parceiro1}: ${formatMoney(c.p1Contr)} • ${parceiro2}: ${formatMoney(c.p2Contr)}`
+      detalhe: `${c.local ? `${c.local} | ` : ''}${parceiro1}: ${formatMoney(c.p1Contr)} - ${parceiro2}: ${formatMoney(c.p2Contr)}`
     })),
     ...despesasRapidas.map((d: any) => ({
       id: d.id,
@@ -44,26 +57,82 @@ export const HubScreen = ({
 
   const handleSalvar = () => {
     if (!depP1 && !depP2) return;
-    setContribuicoes([{ id: Date.now(), mesData: depMes || 'Mês Atual', p1Contr: Number(depP1 || 0), p2Contr: Number(depP2 || 0) }, ...contribuicoes]);
-    setNovoDepositoAberto(false); setDepMes(''); setDepP1(''); setDepP2('');
+    setContribuicoes([{ 
+      id: Date.now(), 
+      mesData: depMes || 'Mês Atual', 
+      local: depLocal || 'Não informado',
+      p1Contr: Number(depP1 || 0), 
+      p2Contr: Number(depP2 || 0) 
+    }, ...contribuicoes]);
+    
+    setNovoDepositoAberto(false); 
+    setDepMes(''); 
+    setDepP1(''); 
+    setDepP2('');
+    setDepLocal('');
   };
 
   return (
     <div className="hub-fintech-container animate-fade-in">
       
+      {/* CAIXA DO VERSÍCULO - TOPO */}
+      <div style={{ 
+        display: 'flex',
+        gap: '16px',
+        background: 'var(--bg)', 
+        padding: '20px', 
+        marginBottom: '24px', 
+        borderRadius: '12px',
+        border: '1px solid var(--border)',
+        alignItems: 'flex-start'
+      }}>
+        {/* Ícone de Aspas */}
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--border)" opacity="0.5">
+          <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
+        </svg>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <span style={{ fontStyle: 'italic', color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.5' }}>
+            "{textoVersiculo}"
+          </span>
+          {refVersiculo && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              — {refVersiculo}
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* 1. CARTÃO DE SALDO CENTRAL */}
       <div className="hub-balance-card">
-        <div className="hub-balance-label">Patrimônio do Casal</div>
+        <div className="hub-balance-label">Saldo Conjunto</div>
         <h1 className="hub-balance-value">{formatMoney(totalCofre)}</h1>
         
-        <div className="split-bar-container" style={{ width: '100%', maxWidth: '350px', height: '10px', marginBottom: '16px' }}>
+        <div className="split-bar-container" style={{ width: '100%', maxWidth: '350px', height: '10px', marginBottom: '20px' }}>
           <div className="split-p1" style={{ width: `${percP1}%` }}></div>
           <div className="split-p2" style={{ width: `${percP2}%` }}></div>
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '0.85rem', color: 'var(--text)' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }}></span> {parceiro1}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }}></span> {parceiro2}</span>
+        {/* NOVA ÁREA DE INFORMAÇÕES INDIVIDUAIS */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '350px', fontSize: '0.9rem' }}>
+          {/* Informações Parceiro 1 */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', fontWeight: 600 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent)' }}></span> 
+              {parceiro1}
+            </span>
+            <span style={{ color: 'var(--text)' }}>{formatMoney(totalP1)}</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8 }}>{percP1.toFixed(1)}% do total</span>
+          </div>
+
+          {/* Informações Parceiro 2 */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', fontWeight: 600 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981' }}></span> 
+              {parceiro2}
+            </span>
+            <span style={{ color: 'var(--text)' }}>{formatMoney(totalP2)}</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8 }}>{percP2.toFixed(1)}% do total</span>
+          </div>
         </div>
       </div>
 
@@ -79,12 +148,12 @@ export const HubScreen = ({
           
           <div className="action-btn" onClick={() => setActiveView('desafio200')}>
             <div className="action-icon" style={{ color: '#f59e0b' }}>{icons.trophy}</div>
-            <span className="action-label">Acelerador de Metas</span>
+            <span className="action-label">Acelerador</span>
           </div>
           
           <div className="action-btn" onClick={() => setActiveView('lazer')}>
             <div className="action-icon" style={{ color: '#ec4899' }}>{icons.lazer}</div>
-            <span className="action-label">Orçamento Livre</span>
+            <span className="action-label">Lazer</span>
           </div>
 
           <div className="action-btn" onClick={() => setActiveView('equilibrio')}>
@@ -102,13 +171,42 @@ export const HubScreen = ({
       {/* MODAL DE DEPÓSITO */}
       {novoDepositoAberto && (
         <div className="simulator-box animate-fade-in" style={{ padding: '24px' }}>
-          <h4 style={{ margin: '0 0 16px 0', color: 'var(--accent)' }}>Registrar Aporte</h4>
-          <div className="simulator-row"><span>Mês/Ref.</span><input type="text" value={depMes} onChange={e => setDepMes(e.target.value)} placeholder="Ex: Março" style={{ width: '100px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
-          <div className="simulator-row"><span>Valor {parceiro1}</span><input type="number" value={depP1} onChange={e => setDepP1(e.target.value)} placeholder="0,00" style={{ width: '100px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
-          <div className="simulator-row"><span>Valor {parceiro2}</span><input type="number" value={depP2} onChange={e => setDepP2(e.target.value)} placeholder="0,00" style={{ width: '100px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
-          <button className="primary" onClick={handleSalvar} style={{ width: '100%', marginTop: '16px', padding: '14px' }}>Salvar no Cofre</button>
+          <h4 style={{ margin: '0 0 16px 0', color: 'var(--accent)' }}>Registrar Depósito</h4>
+          <div className="simulator-row"><span>Mês/Ref.</span><input type="text" value={depMes} onChange={e => setDepMes(e.target.value)} placeholder="Ex: Março" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
+          <div className="simulator-row"><span>Instituição/Local</span><input type="text" value={depLocal} onChange={e => setDepLocal(e.target.value)} placeholder="Ex: Poupança, Nubank" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
+          <div className="simulator-row"><span>Valor {parceiro1}</span><input type="number" value={depP1} onChange={e => setDepP1(e.target.value)} placeholder="0,00" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
+          <div className="simulator-row"><span>Valor {parceiro2}</span><input type="number" value={depP2} onChange={e => setDepP2(e.target.value)} placeholder="0,00" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px' }} /></div>
+          <button className="primary" onClick={handleSalvar} style={{ width: '100%', marginTop: '16px', padding: '14px' }}>Salvar</button>
         </div>
       )}
+
+      {/* CAIXA DA FRASE - ANTES DO EXTRATO */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        borderLeft: '3px solid #8b5cf6',
+        background: 'rgba(139, 92, 246, 0.05)', // Fundo roxo bem transparente
+        padding: '16px',
+        marginBottom: '24px',
+        borderRadius: '0 8px 8px 0',
+      }}>
+        {/* Ícone de Lâmpada / Insight */}
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2"></path>
+          <path d="M12 20v2"></path>
+          <path d="M4 12H2"></path>
+          <path d="M22 12h-2"></path>
+          <path d="M19.07 4.93l-1.41 1.41"></path>
+          <path d="M6.34 17.66l-1.41 1.41"></path>
+          <path d="M19.07 19.07l-1.41-1.41"></path>
+          <path d="M6.34 6.34l-1.41 1.41"></path>
+        </svg>
+        <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.9rem', fontWeight: 500 }}>
+          {fraseDia}
+        </p>
+      </div>
 
       {/* 3. EXTRATO (LISTA) */}
       <div className="extrato-container">
@@ -133,7 +231,7 @@ export const HubScreen = ({
               </div>
               <div className="extrato-info">
                 <span className="extrato-titulo">{item.titulo}</span>
-                <span className="extrato-data">{item.data} • {item.detalhe}</span>
+                <span className="extrato-data" style={{ fontSize: '0.8rem' }}>{item.data} • {item.detalhe}</span>
               </div>
               <div className="extrato-valor" style={{ color: item.tipo === 'entrada' ? '#10b981' : 'var(--text-h)' }}>
                 {item.tipo === 'entrada' ? '+' : '-'}{formatMoney(item.valor)}

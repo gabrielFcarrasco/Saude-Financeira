@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { trilhaData } from '../services/trilhaData';
+import { trilhaData } from '../../services/trilhaData';
 import { SimuladorCDB } from './SimuladorCDB';
 import './TrilhaEducacional.css';
 

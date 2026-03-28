@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { enviarMensagemParaGemini } from '../services/gemini';
-import { auth, db } from '../services/firebase';
+import { enviarMensagemParaGemini } from '../../services/gemini';
+import { auth, db } from '../../services/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import './GeminiWidget.css';
 

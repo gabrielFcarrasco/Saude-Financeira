@@ -1,6 +1,6 @@
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { PlannerLayout } from '../components/PlannerLayout';
+import { PlannerLayout } from '../components/planner/PlannerLayout';
 import { db } from '../services/firebase';
 import './Planner.css';
 

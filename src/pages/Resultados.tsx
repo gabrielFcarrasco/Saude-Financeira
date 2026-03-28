@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrilhaEducacional } from '../components/TrilhaEducacional';
+import { TrilhaEducacional } from '../components/test/TrilhaEducacional';
 
 export const Resultados = () => {
   const [perfil, setPerfil] = useState<string | null>(null);
