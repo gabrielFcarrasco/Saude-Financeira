@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../../services/firebase'; // <-- Importamos o banco e a autenticação
+import { db, auth } from '../../services/firebase'; 
 
 interface LancamentosTabProps {
   transacoes: any[];
-  abrirModal?: () => void; // Deixei opcional caso o parent ainda passe
+  abrirModal?: () => void;
 }
+
+// 💡 MOCK DE DADOS DINÂMICOS:
+// No futuro, estas listas virão da coleção 'categorias' e 'contas' do Firebase do usuário.
+// Deixando em arrays agora, o formulário já fica flexível para a migração do Notion.
+const CATEGORIAS_DESPESA = ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Saúde', 'Dívidas', 'Investimentos', 'Outros'];
+const CATEGORIAS_RECEITA = ['Salário', 'Renda Extra', 'Rendimentos', 'Cashback', 'Outros'];
+const CONTAS_USUARIO = ['Nubank', 'Itaú', 'Inter', 'Carteira (Físico)', 'Vale Alimentação'];
 
 export const LancamentosTab: React.FC<LancamentosTabProps> = ({ transacoes }) => {
   const dataAtualObj = new Date();
@@ -16,15 +23,16 @@ export const LancamentosTab: React.FC<LancamentosTabProps> = ({ transacoes }) =>
   const [filtroAno, setFiltroAno] = useState(dataAtualObj.getFullYear());
   const [filtroCategoria, setFiltroCategoria] = useState('Todas');
 
-  // Estados do Modal
+  // Estados do Modal (Espelho do Notion)
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [tipo, setTipo] = useState('despesa'); // 'despesa' ou 'receita'
+  const [tipo, setTipo] = useState('despesa'); 
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('');
   const [data, setData] = useState(dataFormatadaHoje);
-  const [categoria, setCategoria] = useState('Essenciais');
+  const [categoria, setCategoria] = useState(CATEGORIAS_DESPESA[0]);
   const [subCategoria, setSubCategoria] = useState('');
-  const [metodo, setMetodo] = useState('Pix');
+  const [conta, setConta] = useState(CONTAS_USUARIO[0]); // Substituiu o "método"
+  const [status, setStatus] = useState('pago'); // Novo campo crítico para o Notion
 
   const formatarMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 
@@ -49,31 +57,33 @@ export const LancamentosTab: React.FC<LancamentosTabProps> = ({ transacoes }) =>
     }
 
     try {
+      // 💡 PAYLOAD ESPELHO: Este é o formato exato que o script de migração usará
       await addDoc(collection(db, 'transacoes'), {
-        userId: user.uid, // CRÍTICO: Atrela a transação ao dono
+        userId: user.uid,
         tipo,
         descricao,
         valor: parseFloat(valor),
         data,
         categoria,
-        subCategoria: subCategoria || 'Geral',
-        metodoPagamento: metodo,
+        subCategoria: subCategoria || '',
+        conta, // Mudou de métodoPagamento para conta
+        status, // 'pago' ou 'pendente'
         criadoEm: serverTimestamp()
       });
 
       // Limpa o formulário e fecha o modal
       setDescricao(''); setValor(''); setData(dataFormatadaHoje); 
-      setSubCategoria(''); setIsModalOpen(false);
+      setSubCategoria(''); setStatus('pago'); setIsModalOpen(false);
     } catch (error) {
       alert("Erro ao salvar o registro.");
       console.error(error);
     }
   };
 
-  // Ajusta as categorias dinamicamente com base no Tipo (Receita ou Despesa)
+  // Ajusta as categorias dinamicamente com base no Tipo
   const mudarTipo = (novoTipo: string) => {
     setTipo(novoTipo);
-    setCategoria(novoTipo === 'receita' ? 'Renda' : 'Essenciais');
+    setCategoria(novoTipo === 'receita' ? CATEGORIAS_RECEITA[0] : CATEGORIAS_DESPESA[0]);
   };
 
   return (
@@ -104,11 +114,9 @@ export const LancamentosTab: React.FC<LancamentosTabProps> = ({ transacoes }) =>
             <label style={{ fontSize: '0.9rem', color: 'var(--text)' }}>Categoria:</label>
             <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)' }}>
               <option value="Todas">Todas</option>
-              <option value="Renda">Entradas (Renda)</option>
-              <option value="Essenciais">Essenciais</option>
-              <option value="Lazer">Lazer</option>
-              <option value="Dívidas">Dívidas</option>
-              <option value="Investimentos">Investimentos</option>
+              {[...CATEGORIAS_DESPESA, ...CATEGORIAS_RECEITA].map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -120,23 +128,29 @@ export const LancamentosTab: React.FC<LancamentosTabProps> = ({ transacoes }) =>
                 <th>Data</th>
                 <th>Descrição & Subcategoria</th>
                 <th>Categoria</th>
-                <th>Método</th>
+                <th>Conta</th>
+                <th>Status</th>
                 <th style={{ textAlign: 'right' }}>Valor</th>
               </tr>
             </thead>
             <tbody>
               {transacoesFiltradas.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '40px' }}>Nenhum registro encontrado para este filtro.</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px' }}>Nenhum registro encontrado para este filtro.</td></tr>
               ) : (
                 transacoesFiltradas.map(t => (
-                  <tr key={t.id}>
+                  <tr key={t.id} style={{ opacity: t.status === 'pendente' ? 0.6 : 1 }}>
                     <td>{new Date(t.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
                     <td>
                       <strong style={{ display: 'block', color: 'var(--text-h)' }}>{t.descricao}</strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{t.subCategoria || 'Geral'}</span>
+                      {t.subCategoria && <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{t.subCategoria}</span>}
                     </td>
                     <td><span className="category-badge">{t.categoria}</span></td>
-                    <td><span style={{ fontSize: '0.85rem', padding: '4px 8px', background: 'var(--code-bg)', borderRadius: '4px' }}>{t.metodoPagamento || '-'}</span></td>
+                    <td><span style={{ fontSize: '0.85rem', padding: '4px 8px', background: 'var(--code-bg)', borderRadius: '4px' }}>{t.conta || '-'}</span></td>
+                    <td>
+                      <span style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '12px', background: t.status === 'pago' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)', color: t.status === 'pago' ? '#10b981' : '#f59e0b', fontWeight: 'bold' }}>
+                        {t.status === 'pago' ? 'Pago' : 'Pendente'}
+                      </span>
+                    </td>
                     <td style={{ textAlign: 'right', fontWeight: 'bold', color: t.tipo === 'receita' ? '#10b981' : '#ef4444' }}>
                       {t.tipo === 'receita' ? '+' : '-'}{formatarMoeda(t.valor)}
                     </td>
@@ -172,7 +186,7 @@ export const LancamentosTab: React.FC<LancamentosTabProps> = ({ transacoes }) =>
 
               <div className="form-group">
                 <label>Descrição</label>
-                <input type="text" value={descricao} onChange={e => setDescricao(e.target.value)} required placeholder={tipo === 'despesa' ? 'Ex: Mercado, Uber, Conta de Luz...' : 'Ex: Salário, Freelance...'} />
+                <input type="text" value={descricao} onChange={e => setDescricao(e.target.value)} required placeholder={tipo === 'despesa' ? 'Ex: Mercado, Uber, Luz...' : 'Ex: Salário, Freelance...'} />
               </div>
 
               <div className="form-grid-2">
@@ -190,37 +204,33 @@ export const LancamentosTab: React.FC<LancamentosTabProps> = ({ transacoes }) =>
                 <div className="form-group">
                   <label>Categoria Principal</label>
                   <select value={categoria} onChange={e => setCategoria(e.target.value)} required style={{ width: '100%', padding: '12px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-h)' }}>
-                    {tipo === 'receita' ? (
-                      <>
-                        <option value="Renda">Renda Fixa (Salário)</option>
-                        <option value="Renda Extra">Renda Extra / Freela</option>
-                        <option value="Rendimentos">Rendimentos (Investimentos)</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="Essenciais">Gastos Essenciais (Moradia, Mercado...)</option>
-                        <option value="Lazer">Estilo de Vida & Lazer</option>
-                        <option value="Dívidas">Pagamento de Dívidas</option>
-                        <option value="Investimentos">Aporte (Investimentos)</option>
-                      </>
-                    )}
+                    {(tipo === 'receita' ? CATEGORIAS_RECEITA : CATEGORIAS_DESPESA).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Método</label>
-                  <select value={metodo} onChange={e => setMetodo(e.target.value)} required style={{ width: '100%', padding: '12px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-h)' }}>
-                    <option value="Pix">Pix</option>
-                    <option value="Cartão de Crédito">Cartão de Crédito</option>
-                    <option value="Cartão de Débito">Cartão de Débito</option>
-                    <option value="Dinheiro">Dinheiro Físico</option>
-                    <option value="Boleto">Boleto / Transferência</option>
+                  <label>Conta / Carteira</label>
+                  <select value={conta} onChange={e => setConta(e.target.value)} required style={{ width: '100%', padding: '12px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-h)' }}>
+                    {CONTAS_USUARIO.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
                   </select>
                 </div>
               </div>
 
-              <div className="form-group">
-                <label>Subcategoria / Tags (Opcional)</label>
-                <input type="text" value={subCategoria} onChange={e => setSubCategoria(e.target.value)} placeholder="Ex: Ifood, Netflix, Roupas..." />
+              <div className="form-grid-2">
+                <div className="form-group">
+                  <label>Subcategoria / Tags (Opcional)</label>
+                  <input type="text" value={subCategoria} onChange={e => setSubCategoria(e.target.value)} placeholder="Ex: Ifood, Pet..." />
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select value={status} onChange={e => setStatus(e.target.value)} required style={{ width: '100%', padding: '12px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-h)' }}>
+                    <option value="pago">Realizado / Pago</option>
+                    <option value="pendente">Pendente / Agendado</option>
+                  </select>
+                </div>
               </div>
 
               <button type="submit" className="primary" style={{ width: '100%', marginTop: '16px', padding: '14px', fontSize: '1rem', fontWeight: 600, borderRadius: '8px' }}>
