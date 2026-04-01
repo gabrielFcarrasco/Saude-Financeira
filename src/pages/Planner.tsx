@@ -1,7 +1,7 @@
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore'; // <-- Removemos o orderBy daqui
 import { useEffect, useState } from 'react';
 import { PlannerLayout } from '../components/planner/PlannerLayout';
-import { db } from '../services/firebase';
+import { db, auth } from '../services/firebase'; // <-- IMPORTANTE: Adicionamos o auth aqui!
 import './Planner.css';
 
 // Importações dos componentes isolados
@@ -25,18 +25,32 @@ export const Planner = () => {
 
   // ==================== FIREBASE REAL-TIME ====================
   useEffect(() => {
-    // Busca as transações
-    const unsubT = onSnapshot(query(collection(db, 'transacoes'), orderBy('data', 'desc')), (s) => 
-      setTransacoes(s.docs.map(d => ({ id: d.id, ...d.data() })))
-    );
-    // Busca os compromissos (dívidas)
-    const unsubD = onSnapshot(query(collection(db, 'dividas'), orderBy('criadoEm', 'desc')), (s) => 
-      setDividas(s.docs.map(d => ({ id: d.id, ...d.data() })))
-    );
-    // Busca os objetivos (metas)
-    const unsubM = onSnapshot(query(collection(db, 'metas'), orderBy('criadoEm', 'asc')), (s) => 
-      setMetas(s.docs.map(d => ({ id: d.id, ...d.data() })))
-    );
+    // 1. Verifica quem é o usuário logado
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // 2. Busca APENAS as transações deste usuário
+    const qTransacoes = query(collection(db, 'transacoes'), where('userId', '==', user.uid));
+    const unsubT = onSnapshot(qTransacoes, (s) => {
+      const dados = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Ordena localmente pela data (do mais recente para o mais antigo) para evitar erros de índice no Firebase
+      dados.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+      setTransacoes(dados);
+    });
+
+    // 3. Busca APENAS os compromissos deste usuário
+    const qDividas = query(collection(db, 'dividas'), where('userId', '==', user.uid));
+    const unsubD = onSnapshot(qDividas, (s) => {
+      const dados = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      setDividas(dados);
+    });
+
+    // 4. Busca APENAS as metas deste usuário
+    const qMetas = query(collection(db, 'metas'), where('userId', '==', user.uid));
+    const unsubM = onSnapshot(qMetas, (s) => {
+      const dados = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      setMetas(dados);
+    });
 
     setTimeout(() => setIsLoading(false), 800);
     
@@ -62,7 +76,6 @@ export const Planner = () => {
         <ResumoTab 
           transacoes={transacoes} 
           dividas={dividas} 
-          // Redireciona o usuário para a aba de Lançamentos quando ele clica no botão
           abrirModalLancamento={() => setActiveTab('lancamentos')} 
         />
       )}
