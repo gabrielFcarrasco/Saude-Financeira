@@ -62,12 +62,14 @@ export const PlannerLayout: React.FC<PlannerLayoutProps> = ({ children, activeTa
   };
 
   return (
-    <div className="dashboard-container">
+    // 🚀 Container Maior: Oculta qualquer vazamento extra (O overflow fica por conta das áreas internas)
+    <div className="dashboard-container" style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden' }}>
+      
       {/* Overlay para fechar o menu no mobile ao clicar fora */}
       <div className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)} />
 
-      {/* SIDEBAR */}
-      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+      {/* 🚀 SIDEBAR: Trava a altura em 100% e habilita o Scroll Vertical nela mesma */}
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`} style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {/* Logo clicável que redireciona para a Home */}
           <div 
@@ -99,18 +101,45 @@ export const PlannerLayout: React.FC<PlannerLayoutProps> = ({ children, activeTa
         
         <div style={{ marginTop: 'auto', padding: '24px' }}>
           
-          {/* NOVO: BLOCO DE PERFIL DO USUÁRIO */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--code-bg)', borderRadius: '12px', marginBottom: '16px', border: '1px solid var(--border)' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem', flexShrink: 0 }}>
-              {inicial}
-            </div>
-            <div style={{ overflow: 'hidden' }}>
-              <p style={{ margin: 0, color: 'var(--text-h)', fontWeight: 600, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {/* NOVO: BLOCO DE PERFIL DO USUÁRIO CLICÁVEL (Leva para Configurações) */}
+          <div 
+            onClick={() => handleNavClick('configuracoes')}
+            style={{ 
+              display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', 
+              background: activeTab === 'configuracoes' ? 'var(--accent-bg)' : 'var(--code-bg)', 
+              borderRadius: '12px', marginBottom: '16px', 
+              border: activeTab === 'configuracoes' ? '1px solid var(--accent-border)' : '1px solid var(--border)',
+              cursor: 'pointer', transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+            title="Abrir Configurações"
+          >
+            {user?.photoURL ? (
+              <img 
+                src={user.photoURL} 
+                alt="Foto" 
+                style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid var(--accent)' }} 
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem', flexShrink: 0 }}>
+                {inicial}
+              </div>
+            )}
+            
+            <div style={{ overflow: 'hidden', flex: 1 }}>
+              <p style={{ margin: 0, color: activeTab === 'configuracoes' ? 'var(--accent)' : 'var(--text-h)', fontWeight: 600, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {nomeUsuario}
               </p>
               <p style={{ margin: 0, color: 'var(--text)', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {emailUsuario}
               </p>
+            </div>
+
+            {/* Ícone de Engrenagem (Settings)zinho discreto no canto */}
+            <div style={{ color: 'var(--text)', opacity: 0.6 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             </div>
           </div>
 
@@ -122,8 +151,9 @@ export const PlannerLayout: React.FC<PlannerLayoutProps> = ({ children, activeTa
         </div>
       </aside>
 
-      {/* CONTEÚDO PRINCIPAL */}
-      <main className="dashboard-content">
+      {/* 🚀 CONTEÚDO PRINCIPAL (Painel): É flexível, mas também tem seu scroll particular */}
+      <main className="dashboard-content" style={{ flex: 1, height: '100%', overflowY: 'auto', position: 'relative' }}>
+        
         {/* Header visível apenas no Mobile */}
         <div className="mobile-header">
           <button className="menu-toggle-btn" onClick={() => setIsSidebarOpen(true)}>
