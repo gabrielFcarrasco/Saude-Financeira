@@ -6,7 +6,7 @@ import './CasalTab.css';
 import { HubScreen } from './HubScreen';
 import { OrcamentoLivreScreen } from './OrcamentoLivreScreen';
 import { MetasScreen } from './MetasScreen';
-import { EquilibrioScreen } from './EquilibrioScreen';
+// import { EquilibrioScreen } from './EquilibrioScreen'; // Inativado por enquanto
 import { Desafio200Screen } from './Desafio200Screen';
 import { OnboardingCasal } from './OnboardingCasal';
 
@@ -23,7 +23,8 @@ export const CasalTab: React.FC = () => {
   const [parceiro1, setParceiro1] = useState("Parceiro 1");
   const [parceiro2, setParceiro2] = useState("Parceiro 2");
 
-  const [activeView, setActiveView] = useState<'hub' | 'cofre' | 'lazer' | 'metas' | 'equilibrio' | 'desafio200'>('hub');
+  // Removido 'equilibrio' temporariamente
+  const [activeView, setActiveView] = useState<'hub' | 'cofre' | 'lazer' | 'metas' | 'desafio200'>('hub');
 
   // Estados Financeiros (Agora iniciam vazios)
   const [contribuicoes, setContribuicoes] = useState<any[]>([]);
@@ -31,7 +32,7 @@ export const CasalTab: React.FC = () => {
   const [metas, setMetas] = useState<any[]>([]);
   const [despesasRapidas, setDespesasRapidas] = useState<any[]>([]);
   const [desafioP1, setDesafioP1] = useState<number[]>([]); 
-  const [desafioP2, setDesafioP2] = useState<number[]>([]);      
+  const [desafioP2, setDesafioP2] = useState<number[]>([]);       
   const [limiteMensalLazer, setLimiteMensalLazer] = useState(0);
 
   // Estados de Interface dos Formulários
@@ -232,7 +233,7 @@ export const CasalTab: React.FC = () => {
     parceiro1, parceiro2, activeView, setActiveView, formatMoney, icons,
     contribuicoes, setContribuicoes, saidas, setSaidas, metas, setMetas, 
     despesasRapidas, setDespesasRapidas, desafioP1, setDesafioP1, desafioP2, setDesafioP2,
-    totalCofre, casalId, // Passando o casalId para os filhos poderem salvar os dados corretamente
+    totalCofre, casalId,
     limiteMensalLazer, setLimiteMensalLazer, editandoLimite, setEditandoLimite, novoLimiteInput, setNovoLimiteInput,
     simuladorAberto, setSimuladorAberto, simTitulo, setSimTitulo, simData, setSimData, simItems, setSimItems, initialSimItems,
     modalConcluir, setModalConcluir, valorReal, setValorReal, quemPagou, setQuemPagou, sobraDetectada, setSobraDetectada,
@@ -247,7 +248,7 @@ export const CasalTab: React.FC = () => {
     return <div style={{ textAlign: 'center', marginTop: '100px', color: 'var(--text)' }}>Buscando informações do casal...</div>;
   }
 
-  // AQUI ENTRA O COMPONENTE NOVO
+  // AQUI ENTRA O COMPONENTE NOVO (Limpei o código duplicado e o erro de sintaxe)
   if (statusVinculo !== 'vinculado') {
     return (
       <OnboardingCasal 
@@ -261,75 +262,6 @@ export const CasalTab: React.FC = () => {
         onCancelarConvite={handleCancelarConviteEnviado}
       />
     );
-  }2
-
-  if (statusVinculo !== 'vinculado') {
-    return (
-      <div className="casal-layout-container" style={{ maxWidth: '600px', margin: '40px auto', textAlign: 'center' }}>
-        
-        {statusVinculo === 'sem_vinculo' && (
-          <div style={{ background: 'var(--code-bg)', padding: '40px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.04)' }}>
-            <div style={{ width: 64, height: 64, background: 'rgba(139, 92, 246, 0.08)', color: 'var(--accent)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-            </div>
-            <h2 style={{ color: 'var(--text-h)', margin: '0 0 16px 0' }}>Gestão Financeira a Dois</h2>
-            <p style={{ color: 'var(--text)', marginBottom: '32px', lineHeight: '1.6' }}>
-              Acompanhem o saldo conjunto, planejem despesas de lazer e alcancem suas metas muito mais rápido com uma visão unificada.
-            </p>
-            
-            <form onSubmit={handleEnviarConvite} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <input 
-                type="email" 
-                placeholder="E-mail do seu parceiro(a)" 
-                value={emailConvite}
-                onChange={e => setEmailConvite(e.target.value)}
-                style={{ width: '100%', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', fontSize: '1rem' }}
-                required
-              />
-              <button type="submit" style={{ width: '100%', padding: '16px', borderRadius: '8px', background: 'var(--accent)', color: '#fff', border: 'none', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' }}>
-                Enviar Convite
-              </button>
-            </form>
-          </div>
-        )}
-
-        {statusVinculo === 'aguardando' && (
-          <div style={{ background: 'var(--code-bg)', padding: '40px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.04)' }}>
-            <div style={{ width: 64, height: 64, background: 'rgba(59, 130, 246, 0.08)', color: '#3b82f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            </div>
-            <h2 style={{ color: 'var(--text-h)', margin: '0 0 16px 0' }}>Convite Enviado!</h2>
-            <p style={{ color: 'var(--text)', marginBottom: '32px', lineHeight: '1.6' }}>
-              Estamos aguardando <strong>{emailConvite}</strong> aceitar o convite para liberar o painel de vocês.
-            </p>
-            <button onClick={handleCancelarConviteEnviado} style={{ padding: '12px 24px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer', fontWeight: 'bold' }}>
-              Cancelar Convite
-            </button>
-          </div>
-        )}
-
-        {statusVinculo === 'convite_recebido' && (
-          <div style={{ background: 'var(--code-bg)', padding: '40px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.04)' }}>
-            <div style={{ width: 64, height: 64, background: 'rgba(16, 185, 129, 0.08)', color: '#10b981', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-            </div>
-            <h2 style={{ color: 'var(--text-h)', margin: '0 0 16px 0' }}>Você tem um convite!</h2>
-            <p style={{ color: 'var(--text)', marginBottom: '32px', lineHeight: '1.6' }}>
-              <strong>{parceiro1}</strong> convidou você para compartilhar o planejamento financeiro.
-            </p>
-            
-            <div style={{ display: 'flex', gap: '16px' }}>
-              <button onClick={handleRecusarConvite} style={{ flex: 1, padding: '16px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer', fontWeight: 'bold' }}>
-                Recusar
-              </button>
-              <button onClick={handleAceitarConvite} style={{ flex: 1, padding: '16px', borderRadius: '8px', background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
-                Aceitar Convite
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
   }
 
   // Se chegou aqui, está vinculado!
@@ -337,7 +269,7 @@ export const CasalTab: React.FC = () => {
     case 'hub': return <HubScreen {...screenProps} />;
     case 'desafio200': return <Desafio200Screen {...screenProps} />;
     case 'metas': return <MetasScreen {...screenProps} />;
-    case 'equilibrio': return <EquilibrioScreen {...screenProps} />;
+    // case 'equilibrio': return <EquilibrioScreen {...screenProps} />; // Inativado por enquanto
     case 'lazer': return <OrcamentoLivreScreen {...screenProps} />;
     default: return <HubScreen {...screenProps} />;
   }
