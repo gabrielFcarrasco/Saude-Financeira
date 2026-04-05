@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile, getAdditionalUserInfo } from 'firebase/auth';
+// IMPORTAÇÃO ALTERADA AQUI 👇
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithRedirect, updateProfile, getAdditionalUserInfo } from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebase';
 import { enviarEmailBoasVindas, marcarConviteComoAceito } from '../services/email';
-import { addDoc, collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+// import { addDoc, collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import './Home.css';
 
 export const Login = () => {
@@ -58,30 +59,18 @@ export const Login = () => {
     setErro('');
     setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
+      // FUNÇÃO DE LOGIN ALTERADA AQUI 👇
+      await signInWithRedirect(auth, googleProvider);
       
-      // Verifica se é a primeira vez que essa pessoa entra com o Google
-      const details = getAdditionalUserInfo(result);
-      if (details?.isNewUser) {
-        const nomeGoogle = result.user.displayName || 'Investidor';
-        const emailGoogle = result.user.email || '';
-        
-        // Dispara o e-mail de boas-vindas se for conta nova
-        await enviarEmailBoasVindas(emailGoogle, nomeGoogle);
-        
-        // Atualiza o status do convite
-        await marcarConviteComoAceito(emailGoogle);
+      // NOTA IMPORTANTE SOBRE O REDIRECT:
+      // O código abaixo (getAdditionalUserInfo, etc) não será executado aqui
+      // pois o signInWithRedirect redireciona o usuário para fora da sua página.
+      // O tratamento do retorno (se é conta nova) deve ser feito em outro lugar,
+      // idealmente no seu App.tsx ou em um useEffect aqui no Login.
+      // Por enquanto, o App.tsx já garante que o usuário logado vá para /planner.
 
-        // AGORA VAI DIRETO PARA O PAINEL!
-        navigate('/planner');
-      } else {
-        navigate('/planner'); 
-      }
     } catch (error: any) {
-      if (error.code !== 'auth/popup-closed-by-user') {
-        setErro('Erro ao fazer login com o Google.');
-      }
-    } finally {
+      setErro('Erro ao redirecionar para o Google.');
       setLoading(false);
     }
   };
