@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
-  signInWithRedirect, 
-  getRedirectResult, 
+  signInWithPopup, 
   updateProfile, 
   getAdditionalUserInfo 
 } from 'firebase/auth';
@@ -20,50 +19,9 @@ export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [erro, setErro] = useState('');
-  
-  // Começamos o loading como TRUE para dar tempo do caçador verificar se alguém voltou do Google
-  const [loading, setLoading] = useState(true); 
+  const [loading, setLoading] = useState(false);
 
-  // =================================================================
-  // O "CAÇADOR": Verifica se o usuário acabou de voltar do Google
-  // =================================================================
-  useEffect(() => {
-    const verificarRetornoDoGoogle = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        
-        if (result) {
-          // Opa, alguém voltou com sucesso do Google!
-          const details = getAdditionalUserInfo(result);
-          
-          if (details?.isNewUser) {
-            const nomeGoogle = result.user.displayName || 'Investidor';
-            const emailGoogle = result.user.email || '';
-            
-            // Dispara o e-mail de boas-vindas
-            await enviarEmailBoasVindas(emailGoogle, nomeGoogle);
-            
-            // Atualiza o status do convite
-            await marcarConviteComoAceito(emailGoogle);
-          }
-          
-          // Vai para o painel!
-          navigate('/planner');
-        }
-      } catch (error: any) {
-        setErro('Erro ao processar o login com o Google.');
-      } finally {
-        // Se não voltou do Google (ou já terminou de processar), libera a tela
-        setLoading(false);
-      }
-    };
-
-    verificarRetornoDoGoogle();
-  }, [navigate]);
-
-  // =================================================================
   // Login ou Cadastro com Email e Senha
-  // =================================================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErro('');
@@ -92,16 +50,33 @@ export const Login = () => {
     }
   };
 
-  // =================================================================
-  // Iniciar Login com Google (Apenas joga o usuário pra lá)
-  // =================================================================
+  // Login Seguro com Pop-up (Apoiado pelo novo vercel.json)
   const handleGoogleSignIn = async () => {
     setErro('');
     setLoading(true);
     try {
-      await signInWithRedirect(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      
+      const details = getAdditionalUserInfo(result);
+      if (details?.isNewUser) {
+        const nomeGoogle = result.user.displayName || 'Investidor';
+        const emailGoogle = result.user.email || '';
+        
+        // Espera enviar o e-mail e atualizar o banco
+        await enviarEmailBoasVindas(emailGoogle, nomeGoogle);
+        await marcarConviteComoAceito(emailGoogle);
+
+        // Só depois de tudo pronto, viaja pro planner
+        navigate('/planner');
+      } else {
+        navigate('/planner'); 
+      }
     } catch (error: any) {
-      setErro('Erro ao redirecionar para o Google.');
+      if (error.code !== 'auth/popup-closed-by-user') {
+        console.error("Erro no Google Login:", error);
+        setErro('Ocorreu um erro ao conectar com o Google.');
+      }
+    } finally {
       setLoading(false);
     }
   };
