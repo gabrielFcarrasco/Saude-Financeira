@@ -4,23 +4,20 @@ import { auth, db } from '../../services/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import './GeminiWidget.css';
 
-// Adicionamos props para saber se o usuário está em um casal e qual o ID desse vínculo
 export const GeminiWidget = ({ isCasal = false, idCasal = '' }: any) => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [contextData, setContextData] = useState<string>(''); 
   
-  // Novo estado para controlar de qual carteira a IA está falando
-  // Se não for casal, já vai direto pro 'pessoal'. Se for casal, fica 'pendente' até ele escolher.
-  const [modoConsulta, setModoConsulta] = useState<'pendente' | 'pessoal' | 'conjunto'>(isCasal ? 'pendente' : 'pessoal');
+  // Iniciamos como 'pessoal' por padrão para não quebrar quem é solteiro
+  const [modoConsulta, setModoConsulta] = useState<'pendente' | 'pessoal' | 'conjunto'>('pessoal');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const user = auth.currentUser;
   const primeiroNome = user?.displayName ? user.displayName.split(' ')[0] : 'Investidor';
 
-  // Mensagem inicial adaptada (agora suporta botões de opção)
   const [messages, setMessages] = useState<any[]>([
     { 
       role: 'bot', 
@@ -36,62 +33,87 @@ export const GeminiWidget = ({ isCasal = false, idCasal = '' }: any) => {
     scrollToBottom();
   }, [messages, isLoading, isOpen]);
 
-  // Se for casal e a pessoa acabou de abrir o chat pela primeira vez, a IA pergunta qual o escopo
+  // CORREÇÃO 1: Assim que o app descobrir que é casal, forçamos o modo para 'pendente'
   useEffect(() => {
-    if (isOpen && isCasal && messages.length === 1 && modoConsulta === 'pendente') {
-      setMessages(prev => [
-        ...prev, 
-        { 
-          role: 'bot', 
-          text: 'Como você tem uma conta conjunta vinculada, sobre qual planejamento vamos falar hoje?',
-          opcoes: ['Meu Pessoal', 'Nosso Conjunto'] // Adicionamos opções interativas
-        }
-      ]);
+    if (isCasal && messages.length === 1) {
+      setModoConsulta('pendente');
     }
-  }, [isOpen, isCasal, messages.length, modoConsulta]);
+  }, [isCasal]);
 
-  // Busca os dados do usuário no Firestore baseando-se na escolha dele!
+  // CORREÇÃO 2: Dispara a pergunta inicial de forma segura
+  useEffect(() => {
+    if (isOpen && isCasal && modoConsulta === 'pendente') {
+      // Verifica se já não fizemos a pergunta para não duplicar os botões
+      const jaPerguntou = messages.some(m => m.opcoes);
+      if (!jaPerguntou) {
+        setMessages(prev => [
+          ...prev, 
+          { 
+            role: 'bot', 
+            text: 'Como você tem uma conta conjunta vinculada, sobre qual planejamento vamos falar hoje?',
+            opcoes: ['Meu Pessoal', 'Nosso Conjunto'] 
+          }
+        ]);
+      }
+    }
+  }, [isOpen, isCasal, modoConsulta, messages]);
+
+  // CORREÇÃO 3: Rotas do banco de dados ajustadas para o padrão do CasalTab
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user || !isOpen || modoConsulta === 'pendente') return;
 
       try {
-        let qTransacoes, qMetas;
-
-        // Se escolheu 'pessoal', busca da coleção normal do usuário
-        if (modoConsulta === 'pessoal') {
-          qTransacoes = query(collection(db, 'transacoes'), where('userId', '==', user.uid));
-          qMetas = query(collection(db, 'metas'), where('userId', '==', user.uid));
-        } 
-        // Se escolheu 'conjunto', busca da coleção do casal usando o ID do casal
-        else {
-          qTransacoes = query(collection(db, 'transacoes_casal'), where('casalId', '==', idCasal));
-          qMetas = query(collection(db, 'metas_casal'), where('casalId', '==', idCasal));
-        }
-
-        const transacoesSnapshot = await getDocs(qTransacoes);
-        
         let totalReceitas = 0;
         let totalDespesas = 0;
-        
-        transacoesSnapshot.forEach(doc => {
-          const data = doc.data();
-          if (data.tipo === 'receita') totalReceitas += data.valor;
-          if (data.tipo === 'despesa') totalDespesas += data.valor;
-        });
+        let metasDesc = "";
 
-        const metasSnapshot = await getDocs(qMetas);
-        let metasDesc = metasSnapshot.empty ? "Nenhuma meta cadastrada." : "";
-        metasSnapshot.forEach(doc => {
-          const data = doc.data();
-          metasDesc += `Meta: ${data.titulo} (Progresso: R$${data.atual} de R$${data.alvo}). `;
-        });
+        // DADOS PESSOAIS INDIVIDUAIS
+        if (modoConsulta === 'pessoal') {
+          const qTransacoes = query(collection(db, 'transacoes'), where('userId', '==', user.uid));
+          const qMetas = query(collection(db, 'metas'), where('userId', '==', user.uid));
+
+          const transacoesSnapshot = await getDocs(qTransacoes);
+          transacoesSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.tipo === 'receita') totalReceitas += Number(data.valor || 0);
+            if (data.tipo === 'despesa') totalDespesas += Number(data.valor || 0);
+          });
+
+          const metasSnapshot = await getDocs(qMetas);
+          metasDesc = metasSnapshot.empty ? "Nenhuma meta cadastrada." : "";
+          metasSnapshot.forEach(doc => {
+            const data = doc.data();
+            metasDesc += `Meta: ${data.titulo} (Progresso: R$${data.atual} de R$${data.alvo}). `;
+          });
+        } 
+        // DADOS CONJUNTOS DO CASAL
+        else if (modoConsulta === 'conjunto' && idCasal) {
+          const contribuicoesSnap = await getDocs(collection(db, 'casais', idCasal, 'contribuicoes'));
+          const despesasSnap = await getDocs(collection(db, 'casais', idCasal, 'despesas_rapidas'));
+          const metasSnap = await getDocs(collection(db, 'casais', idCasal, 'metas'));
+
+          contribuicoesSnap.forEach(doc => {
+            const data = doc.data();
+            totalReceitas += (Number(data.p1Contr || 0) + Number(data.p2Contr || 0));
+          });
+
+          despesasSnap.forEach(doc => {
+            totalDespesas += Number(doc.data().valor || 0);
+          });
+
+          metasDesc = metasSnap.empty ? "Nenhuma meta de casal cadastrada." : "";
+          metasSnap.forEach(doc => {
+            const data = doc.data();
+            metasDesc += `Meta: ${data.titulo || data.nome} (Progresso: R$${data.atual} de R$${data.alvo}). `;
+          });
+        }
 
         const saldo = totalReceitas - totalDespesas;
         
         // Monta o resumo e EXPLICITA para a IA qual o modo atual
         const contextoTipo = modoConsulta === 'pessoal' ? 'FINANÇAS PESSOAIS INDIVIDUAIS' : 'FINANÇAS CONJUNTAS DO CASAL';
-        const resumoContexto = `CONTEXTO ATUAL: ${contextoTipo}. Renda Total Declarada: R$${totalReceitas}. Despesas Totais: R$${totalDespesas}. Saldo Atual: R$${saldo}. ${metasDesc}`;
+        const resumoContexto = `CONTEXTO ATUAL: ${contextoTipo}. Renda/Entradas Totais: R$${totalReceitas}. Despesas Totais: R$${totalDespesas}. Saldo Atual no Cofre: R$${saldo}. ${metasDesc}`;
         
         setContextData(resumoContexto);
 
@@ -101,22 +123,20 @@ export const GeminiWidget = ({ isCasal = false, idCasal = '' }: any) => {
     };
 
     fetchUserData();
-  }, [user, isOpen, modoConsulta, idCasal]); // Refaz a busca se o modoConsulta mudar
+  }, [user, isOpen, modoConsulta, idCasal]);
 
-  // Função para quando a pessoa clica nos botões Pessoal/Conjunto
   const handleEscolherModo = (escolha: string) => {
     const modo = escolha === 'Meu Pessoal' ? 'pessoal' : 'conjunto';
     
-    // Tira os botões da tela adicionando a resposta do usuário
     setMessages(prev => {
       const msgsSemBotoes = prev.map(m => ({ ...m, opcoes: undefined }));
       return [...msgsSemBotoes, { role: 'user', text: escolha }];
     });
     
-    setModoConsulta(modo); // Isso engatilha o useEffect do Firebase acima!
+    setModoConsulta(modo); 
     
     setTimeout(() => {
-      setMessages(prev => [...prev, { role: 'bot', text: `Perfeito! Já carreguei os dados do seu plano ${modo}. Como posso ajudar com isso?` }]);
+      setMessages(prev => [...prev, { role: 'bot', text: `Perfeito! Já conectei os dados da sua aba ${modo}. No que posso te ajudar com esses números?` }]);
     }, 600);
   };
 

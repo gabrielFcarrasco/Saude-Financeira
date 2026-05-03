@@ -19,14 +19,16 @@ export const CasalTab: React.FC = () => {
   const [conviteId, setConviteId] = useState<string | null>(null);
   const [casalId, setCasalId] = useState<string | null>(null);
   
+  // ✨ NOVO: Estado para guardar o ID real de quem enviou o convite
+  const [idParceiro, setIdParceiro] = useState<string | null>(null);
+
   // Nomes dinâmicos vindos do banco
   const [parceiro1, setParceiro1] = useState("Parceiro 1");
   const [parceiro2, setParceiro2] = useState("Parceiro 2");
 
-  // Removido 'equilibrio' temporariamente
   const [activeView, setActiveView] = useState<'hub' | 'cofre' | 'lazer' | 'metas' | 'desafio200'>('hub');
 
-  // Estados Financeiros (Agora iniciam vazios)
+  // Estados Financeiros
   const [contribuicoes, setContribuicoes] = useState<any[]>([]);
   const [saidas, setSaidas] = useState<any[]>([]);
   const [metas, setMetas] = useState<any[]>([]);
@@ -58,7 +60,6 @@ export const CasalTab: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Escuta a coleção de casais para ver se o usuário já está vinculado
     const qCasal = query(collection(db, 'casais'), where('membros', 'array-contains', user.uid));
     const unsubCasal = onSnapshot(qCasal, (snapshot) => {
       if (!snapshot.empty) {
@@ -69,7 +70,6 @@ export const CasalTab: React.FC = () => {
         setLimiteMensalLazer(dadosCasal.limiteLazer || 1000);
         setStatusVinculo('vinculado');
       } else {
-        // Se não tem casal, procura convites
         verificarConvites();
       }
     });
@@ -79,8 +79,13 @@ export const CasalTab: React.FC = () => {
       const qRecebidos = query(collection(db, 'convites'), where('emailPara', '==', user.email), where('status', '==', 'pendente'));
       onSnapshot(qRecebidos, (snap) => {
         if (!snap.empty) {
+          const dadosConvite = snap.docs[0].data();
           setConviteId(snap.docs[0].id);
-          setParceiro1(snap.docs[0].data().deNome);
+          setParceiro1(dadosConvite.deNome);
+          
+          // ✨ SALVA O ID DE QUEM MANDOU O CONVITE AQUI
+          setIdParceiro(dadosConvite.deId); 
+          
           setStatusVinculo('convite_recebido');
         } else {
           // Verifica se ENVIOU convite
@@ -102,32 +107,23 @@ export const CasalTab: React.FC = () => {
   }, [user]);
 
   // ==========================================
-  // 2. ESCUTA DOS DADOS FINANCEIROS DO CASAL
+  // 2. ESCUTA DOS DADOS FINANCEIROS DO CASAL (MANTIDO)
   // ==========================================
   useEffect(() => {
     if (statusVinculo !== 'vinculado' || !casalId) return;
 
-    // Escuta Contribuições do Cofre
     const unsubContr = onSnapshot(query(collection(db, 'casais', casalId, 'contribuicoes')), (snap) => {
       setContribuicoes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-
-    // Escuta Despesas Rápidas
     const unsubDespesas = onSnapshot(query(collection(db, 'casais', casalId, 'despesas_rapidas')), (snap) => {
       setDespesasRapidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-
-    // Escuta Saídas Planejadas (Lazer)
     const unsubSaidas = onSnapshot(query(collection(db, 'casais', casalId, 'saidas')), (snap) => {
       setSaidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-
-    // Escuta Metas
     const unsubMetas = onSnapshot(query(collection(db, 'casais', casalId, 'metas')), (snap) => {
       setMetas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-
-    // Escuta Desafio 200
     const unsubDesafio = onSnapshot(doc(db, 'casais', casalId, 'desafio200', 'progresso'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -136,13 +132,7 @@ export const CasalTab: React.FC = () => {
       }
     });
 
-    return () => {
-      unsubContr();
-      unsubDespesas();
-      unsubSaidas();
-      unsubMetas();
-      unsubDesafio();
-    };
+    return () => { unsubContr(); unsubDespesas(); unsubSaidas(); unsubMetas(); unsubDesafio(); };
   }, [statusVinculo, casalId]);
 
   // ==========================================
@@ -167,16 +157,15 @@ export const CasalTab: React.FC = () => {
   };
 
   const handleAceitarConvite = async () => {
-    if (!user || !conviteId) return;
+    // ✨ Agora verificamos se temos o idParceiro antes de avançar
+    if (!user || !conviteId || !idParceiro) return; 
     
     try {
-      // 1. Atualiza o status do convite
       await updateDoc(doc(db, 'convites', conviteId), { status: 'aceito' });
       
-      // 2. Opcional: Aqui você pode disparar uma Cloud Function ou criar o doc do casal direto
-      // Exemplo de criação direta do casal:
       const novoCasal = await addDoc(collection(db, 'casais'), {
-        membros: [user.uid, "ID_DO_PARCEIRO_QUE_ENVIOU"], // Ideal pegar do convite
+        // ✨ CORREÇÃO: Passando o Array correto com os dois UIDs reais!
+        membros: [user.uid, idParceiro], 
         nomeP1: parceiro1, // Quem convidou
         nomeP2: user.displayName || "Parceiro 2", // Quem aceitou
         limiteLazer: 1000,
@@ -248,7 +237,6 @@ export const CasalTab: React.FC = () => {
     return <div style={{ textAlign: 'center', marginTop: '100px', color: 'var(--text)' }}>Buscando informações do casal...</div>;
   }
 
-  // AQUI ENTRA O COMPONENTE NOVO (Limpei o código duplicado e o erro de sintaxe)
   if (statusVinculo !== 'vinculado') {
     return (
       <OnboardingCasal 
