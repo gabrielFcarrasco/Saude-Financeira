@@ -22,8 +22,8 @@ export const CasalTab: React.FC = () => {
   const [parceiro2, setParceiro2] = useState("Parceiro 2");
   const [fotoP1, setFotoP1] = useState<string | null>(null); 
   const [fotoP2, setFotoP2] = useState<string | null>(null); 
-  const [corP1, setCorP1] = useState<string>('#8b5cf6'); // Cor padrão P1 (Roxo)
-  const [corP2, setCorP2] = useState<string>('#10b981'); // Cor padrão P2 (Verde)
+  const [corP1, setCorP1] = useState<string>('#8b5cf6'); 
+  const [corP2, setCorP2] = useState<string>('#10b981'); 
 
   const [activeView, setActiveView] = useState<'hub' | 'cofre' | 'lazer' | 'metas' | 'desafio200'>('hub');
 
@@ -35,6 +35,7 @@ export const CasalTab: React.FC = () => {
   const [desafioP2, setDesafioP2] = useState<number[]>([]);       
   const [limiteMensalLazer, setLimiteMensalLazer] = useState(0);
 
+  // Estados dos formulários repassados para as abas
   const [editandoLimite, setEditandoLimite] = useState(false);
   const [novoLimiteInput, setNovoLimiteInput] = useState('');
   const [simuladorAberto, setSimuladorAberto] = useState(false);
@@ -47,20 +48,14 @@ export const CasalTab: React.FC = () => {
   const [quemPagou, setQuemPagou] = useState('');
   const [sobraDetectada, setSobraDetectada] = useState(0);
   const [novoDepositoAberto, setNovoDepositoAberto] = useState(false);
-  const [depMes, setDepMes] = useState('');
-  const [depP1, setDepP1] = useState('');
-  const [depP2, setDepP2] = useState('');
 
-  // 1. ESCUTA DO BANCO (Atualiza UI)
   useEffect(() => {
     if (!user) return;
-
     let unsubCasal = () => {};
     let unsubRecebidos = () => {};
     let unsubEnviados = () => {};
 
     const qCasal = query(collection(db, 'casais'), where('membros', 'array-contains', user.uid));
-    
     unsubCasal = onSnapshot(qCasal, (snapshot) => {
       if (!snapshot.empty) {
         const dadosCasal = snapshot.docs[0].data();
@@ -70,21 +65,15 @@ export const CasalTab: React.FC = () => {
         const nomeP2Full = dadosCasal.nomeP2 || "Parceiro 2";
         setParceiro1(nomeP1Full.split(' ')[0]);
         setParceiro2(nomeP2Full.split(' ')[0]);
-        
         setFotoP1(dadosCasal.fotoP1 || null);
         setFotoP2(dadosCasal.fotoP2 || null);
         if (dadosCasal.corP1) setCorP1(dadosCasal.corP1);
         if (dadosCasal.corP2) setCorP2(dadosCasal.corP2);
-        
         setLimiteMensalLazer(dadosCasal.limiteLazer || 1000);
         setStatusVinculo('vinculado');
-        
-        unsubRecebidos();
-        unsubEnviados();
+        unsubRecebidos(); unsubEnviados();
       } else {
-        unsubRecebidos();
-        unsubEnviados();
-
+        unsubRecebidos(); unsubEnviados();
         const qRecebidos = query(collection(db, 'convites'), where('emailPara', '==', user.email), where('status', '==', 'pendente'));
         unsubRecebidos = onSnapshot(qRecebidos, (snap) => {
           if (!snap.empty) {
@@ -111,20 +100,13 @@ export const CasalTab: React.FC = () => {
       }
     });
 
-    return () => {
-      unsubCasal();
-      unsubRecebidos();
-      unsubEnviados();
-    };
+    return () => { unsubCasal(); unsubRecebidos(); unsubEnviados(); };
   }, [user]);
 
-  // ✨ NOVO: SINCRONIZADOR DE FOTO DE PERFIL
-  // Confere se a foto da aba de configurações (Cloudinary/Google) mudou e salva no banco do casal
   useEffect(() => {
     const syncPhoto = async () => {
       if (!user || !casalId || !user.photoURL) return;
       const meuPrimeiroNome = user.displayName?.split(' ')[0];
-
       if (meuPrimeiroNome === parceiro1 && user.photoURL !== fotoP1) {
         await updateDoc(doc(db, 'casais', casalId), { fotoP1: user.photoURL });
       } else if (meuPrimeiroNome === parceiro2 && user.photoURL !== fotoP2) {
@@ -134,10 +116,8 @@ export const CasalTab: React.FC = () => {
     syncPhoto();
   }, [user?.photoURL, casalId, parceiro1, parceiro2, fotoP1, fotoP2]);
 
-  // 2. ESCUTA DADOS FINANCEIROS
   useEffect(() => {
     if (statusVinculo !== 'vinculado' || !casalId) return;
-
     const unsubContr = onSnapshot(query(collection(db, 'casais', casalId, 'contribuicoes')), (snap) => setContribuicoes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     const unsubDespesas = onSnapshot(query(collection(db, 'casais', casalId, 'despesas_rapidas')), (snap) => setDespesasRapidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     const unsubSaidas = onSnapshot(query(collection(db, 'casais', casalId, 'saidas')), (snap) => setSaidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
@@ -149,7 +129,6 @@ export const CasalTab: React.FC = () => {
         setDesafioP2(data.p2 || []);
       }
     });
-
     return () => { unsubContr(); unsubDespesas(); unsubSaidas(); unsubMetas(); unsubDesafio(); };
   }, [statusVinculo, casalId]);
 
@@ -169,7 +148,7 @@ export const CasalTab: React.FC = () => {
         membros: [user.uid, idParceiro], 
         nomeP1: parceiro1,
         nomeP2: user.displayName || "Parceiro 2",
-        fotoP2: user.photoURL || null, // Já tenta puxar foto de quem aceitou
+        fotoP2: user.photoURL || null,
         limiteLazer: 1000,
         dataCriacao: serverTimestamp()
       });
@@ -197,13 +176,15 @@ export const CasalTab: React.FC = () => {
   const totalDepositosP2 = contribuicoes.reduce((acc, curr) => acc + (Number(curr.p2Contr) || 0), 0);
   const totalCofre = totalDesafioP1 + totalDesafioP2 + totalDepositosP1 + totalDepositosP2;
 
+  // ✨ INTELIGÊNCIA DE QUEM ESTÁ LOGADO
+  const meuNome = user?.displayName?.split(' ')[0] || '';
+  const currentUserRole = meuNome === parceiro1 ? 'p1' : 'p2';
+
   const icons = {
     voltar: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>,
-    ia: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>,
     cofre: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>,
     lazer: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>,
     metas: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>,
-    balanca: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18"></path><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 7l-9 4"></path><path d="M12 7l9 4"></path></svg>,
     checkBold: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
     trophy: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-1 1.05l-3.91.52"></path><path d="M14 14.66V17c0 .55.47.98 1 1.05l3.91.52"></path><path d="M18 4v5c0 3.31-2.69 6-6 6s-6-2.69-6-6V4z"></path></svg>
   };
@@ -212,30 +193,17 @@ export const CasalTab: React.FC = () => {
     parceiro1, parceiro2, fotoP1, fotoP2, corP1, corP2, activeView, setActiveView, formatMoney, icons,
     contribuicoes, setContribuicoes, saidas, setSaidas, metas, setMetas, 
     despesasRapidas, setDespesasRapidas, desafioP1, setDesafioP1, desafioP2, setDesafioP2,
-    totalCofre, casalId,
+    totalCofre, casalId, currentUserRole, meuNome, // ✨ Adicionado
     limiteMensalLazer, setLimiteMensalLazer, editandoLimite, setEditandoLimite, novoLimiteInput, setNovoLimiteInput,
     simuladorAberto, setSimuladorAberto, simTitulo, setSimTitulo, simData, setSimData, simItems, setSimItems, initialSimItems,
     modalConcluir, setModalConcluir, valorReal, setValorReal, quemPagou, setQuemPagou, sobraDetectada, setSobraDetectada,
-    novoDepositoAberto, setNovoDepositoAberto, depMes, setDepMes, depP1, setDepP1, depP2, setDepP2, 
+    novoDepositoAberto, setNovoDepositoAberto
   };
 
-  if (statusVinculo === 'carregando') {
-    return <div style={{ textAlign: 'center', marginTop: '100px', color: 'var(--text)' }}>Buscando informações do casal...</div>;
-  }
+  if (statusVinculo === 'carregando') return <div style={{ textAlign: 'center', marginTop: '100px', color: 'var(--text)' }}>Buscando informações...</div>;
 
   if (statusVinculo !== 'vinculado') {
-    return (
-      <OnboardingCasal 
-        statusVinculo={statusVinculo as any} 
-        emailConvite={emailConvite}
-        setEmailConvite={setEmailConvite}
-        parceiro1={parceiro1}
-        onEnviarConvite={handleEnviarConvite}
-        onAceitarConvite={handleAceitarConvite}
-        onRecusarConvite={handleRecusarConvite}
-        onCancelarConvite={handleCancelarConviteEnviado}
-      />
-    );
+    return <OnboardingCasal statusVinculo={statusVinculo as any} emailConvite={emailConvite} setEmailConvite={setEmailConvite} parceiro1={parceiro1} onEnviarConvite={handleEnviarConvite} onAceitarConvite={handleAceitarConvite} onRecusarConvite={handleRecusarConvite} onCancelarConvite={handleCancelarConviteEnviado} />;
   }
 
   switch (activeView) {

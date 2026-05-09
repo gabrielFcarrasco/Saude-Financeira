@@ -1,22 +1,25 @@
 import React, { useState } from 'react';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../../services/firebase'; 
+import { db } from '../../services/firebase'; 
 import { frases, versiculos } from './mensagens'; 
 
 const PALETA_DE_CORES = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e', '#84cc16'];
+const BANCOS = ['Nubank', 'Itaú', 'Inter', 'Bradesco', 'Santander', 'C6 Bank', 'Caixa', 'Banco do Brasil', 'Sicoob', 'BTG Pactual', 'Dinheiro Físico', 'Outro'];
 
 export const HubScreen = ({ 
   setActiveView, parceiro1, parceiro2, fotoP1, fotoP2, corP1, corP2, formatMoney,
-  casalId, metas, // ✨ Agora estamos usando as metas aqui
-  contribuicoes, setContribuicoes, despesasRapidas, 
-  desafioP1, desafioP2, novoDepositoAberto, setNovoDepositoAberto,
-  depMes, setDepMes, depP1, setDepP1, depP2, setDepP2
+  casalId, metas, currentUserRole, meuNome,
+  contribuicoes, despesasRapidas, desafioP1, desafioP2, 
+  novoDepositoAberto, setNovoDepositoAberto,
 }: any) => {
 
   const [mostrarExtratoCompleto, setMostrarExtratoCompleto] = useState(false);
-  const [depLocal, setDepLocal] = useState('');
+  const [toastMsg, setToastMsg] = useState('');
   
-  // ✨ NOVO: Estado para saber pra onde o dinheiro vai
+  // ✨ Estados do Novo Modal Minimalista
+  const [valorDeposito, setValorDeposito] = useState('');
+  const [dataDeposito, setDataDeposito] = useState(new Date().toISOString().split('T')[0]); // Data de Hoje Padrão
+  const [bancoSelecionado, setBancoSelecionado] = useState('Nubank');
   const [depMetaDestino, setDepMetaDestino] = useState('');
 
   const [abrindoSeletor, setAbrindoSeletor] = useState<'p1' | 'p2' | null>(null);
@@ -37,6 +40,12 @@ export const HubScreen = ({
 
   const percP1 = totalCofre > 0 ? (totalP1 / totalCofre) * 100 : 50;
   const percP2 = totalCofre > 0 ? (totalP2 / totalCofre) * 100 : 50;
+  const minhaCor = currentUserRole === 'p1' ? corP1 : corP2;
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 4000);
+  };
 
   const extratoUnificado = [
     ...contribuicoes.map((c: any) => {
@@ -70,67 +79,57 @@ export const HubScreen = ({
 
   const extratoExibido = mostrarExtratoCompleto ? extratoUnificado : extratoUnificado.slice(0, 3);
 
-  // ✨ DEPÓSITO INTELIGENTE (COFRE + META AO MESMO TEMPO)
+  // ✨ SALVAR DEPÓSITO DO USUÁRIO
   const handleSalvar = async () => {
-    const valor1 = Number(depP1 || 0);
-    const valor2 = Number(depP2 || 0);
-    const totalDeposito = valor1 + valor2;
+    const valorNum = Number(valorDeposito || 0);
 
-    if (totalDeposito === 0) {
-      alert("Ei! Vocês precisam inserir um valor para depositar. 😉");
-      return;
-    }
-    if (!casalId) {
-      alert("Erro de conexão. Vínculo do casal não encontrado.");
-      return;
-    }
+    if (valorNum <= 0) return showToast("Ei! Insira um valor maior que zero. 😉");
+    if (!casalId) return showToast("Erro de conexão com o cofre.");
     
     try {
       setIsProcessando(true);
+      
+      const v1 = currentUserRole === 'p1' ? valorNum : 0;
+      const v2 = currentUserRole === 'p2' ? valorNum : 0;
+      
+      const dataFormatada = dataDeposito ? new Date(dataDeposito + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'Hoje';
 
-      // 1. Sempre salva no cofre (porque o dinheiro entrou)
+      // 1. Salva no cofre
       await addDoc(collection(db, 'casais', casalId, 'contribuicoes'), {
-        mesData: depMes || new Date().toLocaleString('pt-BR', { month: 'long' }),
-        local: depLocal || 'Cofre Conjunto',
-        p1Contr: valor1,
-        p2Contr: valor2,
+        mesData: dataFormatada,
+        local: bancoSelecionado,
+        p1Contr: v1,
+        p2Contr: v2,
         createdAt: serverTimestamp()
       });
 
-      // 2. Se selecionou uma meta, já joga o progresso para lá!
+      // 2. Joga para a Meta se escolheu uma
       if (depMetaDestino) {
         const metaEscolhida = metas.find((m: any) => m.id === depMetaDestino);
         if (metaEscolhida) {
           const metaRef = doc(db, 'casais', casalId, 'metas', depMetaDestino);
-          
-          let quemDepositou = '';
-          if (valor1 > 0 && valor2 === 0) quemDepositou = parceiro1;
-          else if (valor2 > 0 && valor1 === 0) quemDepositou = parceiro2;
-          else quemDepositou = 'Ambos';
-
           const novoAporte = {
             id: Date.now().toString(),
-            data: depMes || new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-            valor: totalDeposito,
-            descricao: `Depósito Direto (${quemDepositou})`
+            data: dataFormatada,
+            valor: valorNum,
+            descricao: `Depósito (${meuNome})`
           };
-
           await updateDoc(metaRef, {
-            atual: metaEscolhida.atual + totalDeposito,
+            atual: metaEscolhida.atual + valorNum,
             historico: [novoAporte, ...(metaEscolhida.historico || [])]
           });
         }
       }
 
       setNovoDepositoAberto(false); 
-      setDepMes(''); 
-      setDepP1(''); 
-      setDepP2(''); 
-      setDepLocal('');
-      setDepMetaDestino(''); // Reseta o seletor
+      setValorDeposito('');
+      setDataDeposito(new Date().toISOString().split('T')[0]);
+      setDepMetaDestino('');
+      showToast("Depósito salvo com sucesso! 🎉");
+      
     } catch (error) {
-      console.error("Erro ao salvar depósito:", error);
-      alert("Houve um erro ao salvar seu depósito. Tente novamente.");
+      console.error("Erro ao salvar:", error);
+      showToast("Houve um erro ao salvar seu depósito.");
     } finally {
       setIsProcessando(false);
     }
@@ -142,35 +141,32 @@ export const HubScreen = ({
       const campoCor = abrindoSeletor === 'p1' ? 'corP1' : 'corP2';
       await updateDoc(doc(db, 'casais', casalId), { [campoCor]: cor });
       setAbrindoSeletor(null);
-    } catch (error) {
-      console.error("Erro ao alterar cor:", error);
-    }
+    } catch (error) { console.error(error); }
   };
 
   const abrirSeletorSeguro = (perfil: 'p1' | 'p2', nomePerfil: string) => {
-    const meuNome = auth.currentUser?.displayName?.split(' ')[0];
     if (meuNome === nomePerfil) setAbrindoSeletor(perfil);
-    else alert(`Você só pode trocar a sua própria cor! Deixa a do(a) ${nomePerfil} em paz! 😂`);
+    else showToast(`Você só pode trocar a sua própria cor! Deixa a do(a) ${nomePerfil} em paz! 😂`);
   };
 
   const renderAvatar = (nome: string, fotoUrl: string | null, corFundo: string) => {
     if (fotoUrl) return <img src={fotoUrl} alt={nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
-    const inicial = nome ? nome.charAt(0).toUpperCase() : '?';
-    return (
-      <div style={{ width: '100%', height: '100%', background: corFundo, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.2rem', fontWeight: 'bold' }}>
-        {inicial}
-      </div>
-    );
+    return <div style={{ width: '100%', height: '100%', background: corFundo, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.2rem', fontWeight: 'bold' }}>{nome ? nome.charAt(0).toUpperCase() : '?'}</div>;
   };
 
   return (
     <div className="hub-fintech-container animate-fade-in" style={{ position: 'relative' }}>
       
+      {/* ✨ TOAST DE NOTIFICAÇÃO ANIMADO */}
+      {toastMsg && (
+        <div className="animate-slide-up" style={{ position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', background: 'var(--text-h)', color: 'var(--bg)', padding: '14px 24px', borderRadius: '30px', zIndex: 9999, fontWeight: 'bold', fontSize: '0.9rem', boxShadow: '0 8px 16px rgba(0,0,0,0.3)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>ℹ️</span> {toastMsg}
+        </div>
+      )}
+
       {/* VERSÍCULO */}
       <div style={{ display: 'flex', gap: '16px', background: 'var(--bg)', padding: '20px', marginBottom: '24px', borderRadius: '12px', border: '1px solid var(--border)', alignItems: 'flex-start' }}>
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--border)" opacity="0.5" flexShrink="0">
-          <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
-        </svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--border)" opacity="0.5" flexShrink="0"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontStyle: 'italic', color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.5' }}>"{textoVersiculo}"</span>
           {refVersiculo && <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>— {refVersiculo}</span>}
@@ -180,10 +176,10 @@ export const HubScreen = ({
       {/* SALDO CENTRAL */}
       <div className="hub-balance-card" style={{ position: 'relative', paddingTop: '40px' }}>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'absolute', top: '-28px', left: '0', right: '0' }}>
-          <div onClick={() => abrirSeletorSeguro('p1', parceiro1)} style={{ zIndex: 2, width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP1}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }} title="Mudar minha cor">
+          <div onClick={() => abrirSeletorSeguro('p1', parceiro1)} style={{ zIndex: 2, width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP1}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }}>
             {renderAvatar(parceiro1, fotoP1, corP1)}
           </div>
-          <div onClick={() => abrirSeletorSeguro('p2', parceiro2)} style={{ zIndex: 1, marginLeft: '-16px', width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP2}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }} title="Mudar minha cor">
+          <div onClick={() => abrirSeletorSeguro('p2', parceiro2)} style={{ zIndex: 1, marginLeft: '-16px', width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP2}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }}>
             {renderAvatar(parceiro2, fotoP2, corP2)}
           </div>
         </div>
@@ -198,17 +194,12 @@ export const HubScreen = ({
         
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '350px', fontSize: '0.9rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', fontWeight: 600 }}>
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: corP1 }}></span> {parceiro1}
-            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', fontWeight: 600 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: corP1 }}></span> {parceiro1}</span>
             <span style={{ color: 'var(--text)' }}>{formatMoney(totalP1)}</span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8 }}>{percP1.toFixed(1)}%</span>
           </div>
-
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', fontWeight: 600 }}>
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: corP2 }}></span> {parceiro2}
-            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', fontWeight: 600 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: corP2 }}></span> {parceiro2}</span>
             <span style={{ color: 'var(--text)' }}>{formatMoney(totalP2)}</span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8 }}>{percP2.toFixed(1)}%</span>
           </div>
@@ -229,12 +220,11 @@ export const HubScreen = ({
         </div>
       )}
 
-      {/* ATALHOS RÁPIDOS */}
       <div className="hub-actions-wrapper">
         <div className="hub-actions-list">
-          <div className="action-btn" onClick={() => setNovoDepositoAberto(!novoDepositoAberto)} style={{ borderColor: novoDepositoAberto ? corP1 : 'var(--border)' }}>
-            <div className="action-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
-            <span className="action-label">Depositar</span>
+          <div className="action-btn" onClick={() => setNovoDepositoAberto(!novoDepositoAberto)} style={{ borderColor: novoDepositoAberto ? minhaCor : 'var(--border)' }}>
+            <div className="action-icon" style={{ color: novoDepositoAberto ? minhaCor : 'currentColor' }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+            <span className="action-label" style={{ color: novoDepositoAberto ? minhaCor : 'var(--text)' }}>Depositar</span>
           </div>
           <div className="action-btn" onClick={() => setActiveView('desafio200')}>
             <div className="action-icon" style={{ color: '#f59e0b' }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-1 1.05l-3.91.52"></path><path d="M14 14.66V17c0 .55.47.98 1 1.05l3.91.52"></path><path d="M18 4v5c0 3.31-2.69 6-6 6s-6-2.69-6-6V4z"></path></svg></div>
@@ -251,75 +241,60 @@ export const HubScreen = ({
         </div>
       </div>
 
-      {/* ✨ MODAL DE DEPÓSITO ATUALIZADO COM O SELETOR DE META */}
+      {/* ✨ MODAL DE DEPÓSITO PENSADO PARA MOBILE (APENAS O USUÁRIO) */}
       {novoDepositoAberto && (
         <div className="simulator-box animate-fade-in" style={{ padding: '24px' }}>
           <h4 style={{ margin: '0 0 16px 0', color: 'var(--text-h)' }}>Registrar Depósito</h4>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600 }}>Valor {parceiro1}</span>
-              <input type="number" value={depP1} onChange={e => setDepP1(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600 }}>Valor {parceiro2}</span>
-              <input type="number" value={depP2} onChange={e => setDepP2(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }} />
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600, textTransform: 'uppercase' }}>Seu Valor ({meuNome})</span>
+            <input type="number" value={valorDeposito} onChange={e => setValorDeposito(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '16px', border: '1px solid var(--border)', borderRadius: '12px', outline: 'none', boxSizing: 'border-box', fontSize: '1.2rem', fontWeight: 'bold' }} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600 }}>Mês/Ref.</span>
-              <input type="text" value={depMes} onChange={e => setDepMes(e.target.value)} placeholder="Ex: Março" style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 600, textTransform: 'uppercase' }}>Data</span>
+              <input type="date" value={dataDeposito} onChange={e => setDataDeposito(e.target.value)} style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '14px', border: '1px solid var(--border)', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600 }}>Local (Opcional)</span>
-              <input type="text" value={depLocal} onChange={e => setDepLocal(e.target.value)} placeholder="Ex: Nubank" style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 600, textTransform: 'uppercase' }}>Banco Original</span>
+              <select value={bancoSelecionado} onChange={e => setBancoSelecionado(e.target.value)} style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '14px', border: '1px solid var(--border)', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }}>
+                {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
             </div>
           </div>
 
-          {/* NOVO: SELETOR DE DESTINO DO DINHEIRO */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '16px', background: 'var(--bg)', padding: '12px', borderRadius: '8px', border: '1px dashed var(--border)' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600 }}>Onde esse dinheiro vai ficar?</span>
-            <select 
-              value={depMetaDestino} 
-              onChange={e => setDepMetaDestino(e.target.value)}
-              style={{ width: '100%', padding: '10px', background: 'var(--code-bg)', color: 'var(--text-h)', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', cursor: 'pointer' }}
-            >
-              <option value="">Cofre Conjunto (Livre)</option>
-              {metas.map((m: any) => (
-                <option key={m.id} value={m.id}>Direto para: {m.titulo}</option>
-              ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '20px', background: 'var(--bg)', padding: '14px', borderRadius: '12px', border: '1px dashed var(--border)' }}>
+            <span style={{ fontSize: '0.8rem', color: minhaCor, fontWeight: 600 }}>Destino do Dinheiro</span>
+            <select value={depMetaDestino} onChange={e => setDepMetaDestino(e.target.value)} style={{ width: '100%', padding: '10px', background: 'var(--code-bg)', color: 'var(--text-h)', border: 'none', borderBottom: '1px solid var(--border)', borderRadius: '0', outline: 'none', cursor: 'pointer' }}>
+              <option value="">Deixar livre no Cofre</option>
+              {metas.map((m: any) => <option key={m.id} value={m.id}>Direcionar para: {m.titulo}</option>)}
             </select>
           </div>
 
-          <button className="primary" disabled={isProcessando} onClick={handleSalvar} style={{ width: '100%', padding: '14px', borderRadius: '8px', border: 'none', background: corP1, color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>
+          <button className="primary" disabled={isProcessando} onClick={handleSalvar} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', background: minhaCor, color: '#fff', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer' }}>
             {isProcessando ? 'Salvando...' : 'Confirmar Depósito'}
           </button>
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderLeft: `3px solid ${corP1}`, background: 'rgba(139, 92, 246, 0.05)', padding: '16px', marginBottom: '24px', borderRadius: '0 8px 8px 0' }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={corP1} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" flexShrink="0"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4 12H2"></path><path d="M22 12h-2"></path><path d="M19.07 4.93l-1.41 1.41"></path><path d="M6.34 17.66l-1.41 1.41"></path><path d="M19.07 19.07l-1.41-1.41"></path><path d="M6.34 6.34l-1.41 1.41"></path></svg>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderLeft: `3px solid ${minhaCor}`, background: 'rgba(139, 92, 246, 0.05)', padding: '16px', marginBottom: '24px', borderRadius: '0 8px 8px 0' }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={minhaCor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" flexShrink="0"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4 12H2"></path><path d="M22 12h-2"></path><path d="M19.07 4.93l-1.41 1.41"></path><path d="M6.34 17.66l-1.41 1.41"></path><path d="M19.07 19.07l-1.41-1.41"></path><path d="M6.34 6.34l-1.41 1.41"></path></svg>
         <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.9rem', fontWeight: 500 }}>{fraseDia}</p>
       </div>
 
       <div className="extrato-container">
         <div className="extrato-header">
           <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Últimas Movimentações</h3>
-          <button onClick={() => setMostrarExtratoCompleto(!mostrarExtratoCompleto)} style={{ background: 'transparent', border: 'none', color: corP1, fontWeight: 'bold', cursor: 'pointer' }}>
+          <button onClick={() => setMostrarExtratoCompleto(!mostrarExtratoCompleto)} style={{ background: 'transparent', border: 'none', color: minhaCor, fontWeight: 'bold', cursor: 'pointer' }}>
             {mostrarExtratoCompleto ? 'Ocultar' : 'Ver tudo'}
           </button>
         </div>
-
         <div>
           {extratoExibido.map((item: any) => (
             <div key={`${item.tipo}-${item.id}`} className={`extrato-item ${item.tipo}`}>
               <div className="extrato-icon-box">
-                {item.tipo === 'entrada' 
-                  ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                }
+                {item.tipo === 'entrada' ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>}
               </div>
               <div className="extrato-info">
                 <span className="extrato-titulo">{item.titulo}</span>
@@ -330,10 +305,7 @@ export const HubScreen = ({
               </div>
             </div>
           ))}
-          
-          {extratoUnificado.length === 0 && (
-            <p style={{ textAlign: 'center', color: 'var(--text)', padding: '16px 0' }}>Nenhuma movimentação registrada.</p>
-          )}
+          {extratoUnificado.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text)', padding: '16px 0' }}>Nenhuma movimentação registrada.</p>}
         </div>
       </div>
     </div>
