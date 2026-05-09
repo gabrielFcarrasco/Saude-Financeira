@@ -6,29 +6,27 @@ import './CasalTab.css';
 import { HubScreen } from './HubScreen';
 import { OrcamentoLivreScreen } from './OrcamentoLivreScreen';
 import { MetasScreen } from './MetasScreen';
-// import { EquilibrioScreen } from './EquilibrioScreen'; // Inativado por enquanto
 import { Desafio200Screen } from './Desafio200Screen';
 import { OnboardingCasal } from './OnboardingCasal';
 
 export const CasalTab: React.FC = () => {
   const user = auth.currentUser;
   
-  // Estados de Vínculo e Autenticação
   const [statusVinculo, setStatusVinculo] = useState<'carregando' | 'sem_vinculo' | 'aguardando' | 'convite_recebido' | 'vinculado'>('carregando');
   const [emailConvite, setEmailConvite] = useState('');
   const [conviteId, setConviteId] = useState<string | null>(null);
   const [casalId, setCasalId] = useState<string | null>(null);
-  
-  // ✨ NOVO: Estado para guardar o ID real de quem enviou o convite
   const [idParceiro, setIdParceiro] = useState<string | null>(null);
 
-  // Nomes dinâmicos vindos do banco
   const [parceiro1, setParceiro1] = useState("Parceiro 1");
   const [parceiro2, setParceiro2] = useState("Parceiro 2");
+  const [fotoP1, setFotoP1] = useState<string | null>(null); 
+  const [fotoP2, setFotoP2] = useState<string | null>(null); 
+  const [corP1, setCorP1] = useState<string>('#8b5cf6'); // Cor padrão P1 (Roxo)
+  const [corP2, setCorP2] = useState<string>('#10b981'); // Cor padrão P2 (Verde)
 
   const [activeView, setActiveView] = useState<'hub' | 'cofre' | 'lazer' | 'metas' | 'desafio200'>('hub');
 
-  // Estados Financeiros
   const [contribuicoes, setContribuicoes] = useState<any[]>([]);
   const [saidas, setSaidas] = useState<any[]>([]);
   const [metas, setMetas] = useState<any[]>([]);
@@ -37,7 +35,6 @@ export const CasalTab: React.FC = () => {
   const [desafioP2, setDesafioP2] = useState<number[]>([]);       
   const [limiteMensalLazer, setLimiteMensalLazer] = useState(0);
 
-  // Estados de Interface dos Formulários
   const [editandoLimite, setEditandoLimite] = useState(false);
   const [novoLimiteInput, setNovoLimiteInput] = useState('');
   const [simuladorAberto, setSimuladorAberto] = useState(false);
@@ -54,76 +51,97 @@ export const CasalTab: React.FC = () => {
   const [depP1, setDepP1] = useState('');
   const [depP2, setDepP2] = useState('');
 
-  // ==========================================
-  // 1. ESCUTA DE VÍNCULO (CASAL OU CONVITE)
-  // ==========================================
+  // 1. ESCUTA DO BANCO (Atualiza UI)
   useEffect(() => {
     if (!user) return;
 
+    let unsubCasal = () => {};
+    let unsubRecebidos = () => {};
+    let unsubEnviados = () => {};
+
     const qCasal = query(collection(db, 'casais'), where('membros', 'array-contains', user.uid));
-    const unsubCasal = onSnapshot(qCasal, (snapshot) => {
+    
+    unsubCasal = onSnapshot(qCasal, (snapshot) => {
       if (!snapshot.empty) {
         const dadosCasal = snapshot.docs[0].data();
         setCasalId(snapshot.docs[0].id);
-        setParceiro1(dadosCasal.nomeP1 || "Parceiro 1");
-        setParceiro2(dadosCasal.nomeP2 || "Parceiro 2");
+        
+        const nomeP1Full = dadosCasal.nomeP1 || "Parceiro 1";
+        const nomeP2Full = dadosCasal.nomeP2 || "Parceiro 2";
+        setParceiro1(nomeP1Full.split(' ')[0]);
+        setParceiro2(nomeP2Full.split(' ')[0]);
+        
+        setFotoP1(dadosCasal.fotoP1 || null);
+        setFotoP2(dadosCasal.fotoP2 || null);
+        if (dadosCasal.corP1) setCorP1(dadosCasal.corP1);
+        if (dadosCasal.corP2) setCorP2(dadosCasal.corP2);
+        
         setLimiteMensalLazer(dadosCasal.limiteLazer || 1000);
         setStatusVinculo('vinculado');
+        
+        unsubRecebidos();
+        unsubEnviados();
       } else {
-        verificarConvites();
+        unsubRecebidos();
+        unsubEnviados();
+
+        const qRecebidos = query(collection(db, 'convites'), where('emailPara', '==', user.email), where('status', '==', 'pendente'));
+        unsubRecebidos = onSnapshot(qRecebidos, (snap) => {
+          if (!snap.empty) {
+            const dadosConvite = snap.docs[0].data();
+            setConviteId(snap.docs[0].id);
+            const nomeDeFull = dadosConvite.deNome || "Parceiro";
+            setParceiro1(nomeDeFull.split(' ')[0]);
+            setIdParceiro(dadosConvite.deId); 
+            setStatusVinculo('convite_recebido');
+          } else {
+            unsubEnviados();
+            const qEnviados = query(collection(db, 'convites'), where('deId', '==', user.uid), where('status', '==', 'pendente'));
+            unsubEnviados = onSnapshot(qEnviados, (snapEnv) => {
+              if (!snapEnv.empty) {
+                setEmailConvite(snapEnv.docs[0].data().emailPara);
+                setConviteId(snapEnv.docs[0].id);
+                setStatusVinculo('aguardando');
+              } else {
+                setStatusVinculo(prev => prev === 'vinculado' ? 'vinculado' : 'sem_vinculo');
+              }
+            });
+          }
+        });
       }
     });
 
-    const verificarConvites = () => {
-      // Verifica se RECEBEU convite
-      const qRecebidos = query(collection(db, 'convites'), where('emailPara', '==', user.email), where('status', '==', 'pendente'));
-      onSnapshot(qRecebidos, (snap) => {
-        if (!snap.empty) {
-          const dadosConvite = snap.docs[0].data();
-          setConviteId(snap.docs[0].id);
-          setParceiro1(dadosConvite.deNome);
-          
-          // ✨ SALVA O ID DE QUEM MANDOU O CONVITE AQUI
-          setIdParceiro(dadosConvite.deId); 
-          
-          setStatusVinculo('convite_recebido');
-        } else {
-          // Verifica se ENVIOU convite
-          const qEnviados = query(collection(db, 'convites'), where('deId', '==', user.uid), where('status', '==', 'pendente'));
-          onSnapshot(qEnviados, (snapEnv) => {
-            if (!snapEnv.empty) {
-              setEmailConvite(snapEnv.docs[0].data().emailPara);
-              setConviteId(snapEnv.docs[0].id);
-              setStatusVinculo('aguardando');
-            } else {
-              setStatusVinculo('sem_vinculo');
-            }
-          });
-        }
-      });
+    return () => {
+      unsubCasal();
+      unsubRecebidos();
+      unsubEnviados();
     };
-
-    return () => unsubCasal();
   }, [user]);
 
-  // ==========================================
-  // 2. ESCUTA DOS DADOS FINANCEIROS DO CASAL (MANTIDO)
-  // ==========================================
+  // ✨ NOVO: SINCRONIZADOR DE FOTO DE PERFIL
+  // Confere se a foto da aba de configurações (Cloudinary/Google) mudou e salva no banco do casal
+  useEffect(() => {
+    const syncPhoto = async () => {
+      if (!user || !casalId || !user.photoURL) return;
+      const meuPrimeiroNome = user.displayName?.split(' ')[0];
+
+      if (meuPrimeiroNome === parceiro1 && user.photoURL !== fotoP1) {
+        await updateDoc(doc(db, 'casais', casalId), { fotoP1: user.photoURL });
+      } else if (meuPrimeiroNome === parceiro2 && user.photoURL !== fotoP2) {
+        await updateDoc(doc(db, 'casais', casalId), { fotoP2: user.photoURL });
+      }
+    };
+    syncPhoto();
+  }, [user?.photoURL, casalId, parceiro1, parceiro2, fotoP1, fotoP2]);
+
+  // 2. ESCUTA DADOS FINANCEIROS
   useEffect(() => {
     if (statusVinculo !== 'vinculado' || !casalId) return;
 
-    const unsubContr = onSnapshot(query(collection(db, 'casais', casalId, 'contribuicoes')), (snap) => {
-      setContribuicoes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-    const unsubDespesas = onSnapshot(query(collection(db, 'casais', casalId, 'despesas_rapidas')), (snap) => {
-      setDespesasRapidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-    const unsubSaidas = onSnapshot(query(collection(db, 'casais', casalId, 'saidas')), (snap) => {
-      setSaidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-    const unsubMetas = onSnapshot(query(collection(db, 'casais', casalId, 'metas')), (snap) => {
-      setMetas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    const unsubContr = onSnapshot(query(collection(db, 'casais', casalId, 'contribuicoes')), (snap) => setContribuicoes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+    const unsubDespesas = onSnapshot(query(collection(db, 'casais', casalId, 'despesas_rapidas')), (snap) => setDespesasRapidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+    const unsubSaidas = onSnapshot(query(collection(db, 'casais', casalId, 'saidas')), (snap) => setSaidas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+    const unsubMetas = onSnapshot(query(collection(db, 'casais', casalId, 'metas')), (snap) => setMetas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     const unsubDesafio = onSnapshot(doc(db, 'casais', casalId, 'desafio200', 'progresso'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -135,70 +153,40 @@ export const CasalTab: React.FC = () => {
     return () => { unsubContr(); unsubDespesas(); unsubSaidas(); unsubMetas(); unsubDesafio(); };
   }, [statusVinculo, casalId]);
 
-  // ==========================================
-  // AÇÕES DE CONVITE (FIREBASE)
-  // ==========================================
   const handleEnviarConvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!emailConvite || !user) return;
-    
     try {
-      await addDoc(collection(db, 'convites'), {
-        deId: user.uid,
-        deNome: user.displayName || "Seu Parceiro",
-        emailPara: emailConvite.toLowerCase(),
-        status: 'pendente',
-        dataEnvio: serverTimestamp()
-      });
+      await addDoc(collection(db, 'convites'), { deId: user.uid, deNome: user.displayName || "Seu Parceiro", emailPara: emailConvite.toLowerCase(), status: 'pendente', dataEnvio: serverTimestamp() });
       setStatusVinculo('aguardando');
-    } catch (error) {
-      console.error("Erro ao enviar convite:", error);
-    }
+    } catch (error) { console.error(error); }
   };
 
   const handleAceitarConvite = async () => {
-    // ✨ Agora verificamos se temos o idParceiro antes de avançar
     if (!user || !conviteId || !idParceiro) return; 
-    
     try {
-      await updateDoc(doc(db, 'convites', conviteId), { status: 'aceito' });
-      
       const novoCasal = await addDoc(collection(db, 'casais'), {
-        // ✨ CORREÇÃO: Passando o Array correto com os dois UIDs reais!
         membros: [user.uid, idParceiro], 
-        nomeP1: parceiro1, // Quem convidou
-        nomeP2: user.displayName || "Parceiro 2", // Quem aceitou
+        nomeP1: parceiro1,
+        nomeP2: user.displayName || "Parceiro 2",
+        fotoP2: user.photoURL || null, // Já tenta puxar foto de quem aceitou
         limiteLazer: 1000,
         dataCriacao: serverTimestamp()
       });
-      
+      await updateDoc(doc(db, 'convites', conviteId), { status: 'aceito' });
       setCasalId(novoCasal.id);
       setStatusVinculo('vinculado');
-    } catch (error) {
-      console.error("Erro ao aceitar convite:", error);
-    }
+    } catch (error) { console.error(error); }
   };
 
   const handleRecusarConvite = async () => {
     if (!conviteId) return;
-    try {
-      await deleteDoc(doc(db, 'convites', conviteId));
-      setStatusVinculo('sem_vinculo');
-      setEmailConvite('');
-    } catch (error) {
-      console.error("Erro ao recusar convite:", error);
-    }
+    try { await deleteDoc(doc(db, 'convites', conviteId)); setStatusVinculo('sem_vinculo'); setEmailConvite(''); } catch (error) { console.error(error); }
   };
 
   const handleCancelarConviteEnviado = async () => {
     if (!conviteId) return;
-    try {
-      await deleteDoc(doc(db, 'convites', conviteId));
-      setStatusVinculo('sem_vinculo');
-      setEmailConvite('');
-    } catch (error) {
-      console.error("Erro ao cancelar convite:", error);
-    }
+    try { await deleteDoc(doc(db, 'convites', conviteId)); setStatusVinculo('sem_vinculo'); setEmailConvite(''); } catch (error) { console.error(error); }
   };
 
   const formatMoney = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -215,11 +203,13 @@ export const CasalTab: React.FC = () => {
     cofre: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>,
     lazer: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>,
     metas: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>,
-    balanca: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18"></path><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 7l-9 4"></path><path d="M12 7l9 4"></path></svg>
+    balanca: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18"></path><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 7l-9 4"></path><path d="M12 7l9 4"></path></svg>,
+    checkBold: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
+    trophy: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-1 1.05l-3.91.52"></path><path d="M14 14.66V17c0 .55.47.98 1 1.05l3.91.52"></path><path d="M18 4v5c0 3.31-2.69 6-6 6s-6-2.69-6-6V4z"></path></svg>
   };
 
   const screenProps = {
-    parceiro1, parceiro2, activeView, setActiveView, formatMoney, icons,
+    parceiro1, parceiro2, fotoP1, fotoP2, corP1, corP2, activeView, setActiveView, formatMoney, icons,
     contribuicoes, setContribuicoes, saidas, setSaidas, metas, setMetas, 
     despesasRapidas, setDespesasRapidas, desafioP1, setDesafioP1, desafioP2, setDesafioP2,
     totalCofre, casalId,
@@ -229,10 +219,6 @@ export const CasalTab: React.FC = () => {
     novoDepositoAberto, setNovoDepositoAberto, depMes, setDepMes, depP1, setDepP1, depP2, setDepP2, 
   };
 
-  // ==========================================
-  // RENDERIZAÇÃO
-  // ==========================================
-  
   if (statusVinculo === 'carregando') {
     return <div style={{ textAlign: 'center', marginTop: '100px', color: 'var(--text)' }}>Buscando informações do casal...</div>;
   }
@@ -252,12 +238,10 @@ export const CasalTab: React.FC = () => {
     );
   }
 
-  // Se chegou aqui, está vinculado!
   switch (activeView) {
     case 'hub': return <HubScreen {...screenProps} />;
     case 'desafio200': return <Desafio200Screen {...screenProps} />;
     case 'metas': return <MetasScreen {...screenProps} />;
-    // case 'equilibrio': return <EquilibrioScreen {...screenProps} />; // Inativado por enquanto
     case 'lazer': return <OrcamentoLivreScreen {...screenProps} />;
     default: return <HubScreen {...screenProps} />;
   }

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../services/firebase'; // Ajuste o caminho se necessário
+import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../../services/firebase'; 
 import { frases, versiculos } from './mensagens'; 
 
+const PALETA_DE_CORES = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e', '#84cc16'];
+
 export const HubScreen = ({ 
-  setActiveView, parceiro1, parceiro2, formatMoney,
-  casalId, // Novo prop que o CasalTab está passando
+  setActiveView, parceiro1, parceiro2, fotoP1, fotoP2, corP1, corP2, formatMoney,
+  casalId, 
   contribuicoes, setContribuicoes, despesasRapidas, 
   desafioP1, desafioP2, novoDepositoAberto, setNovoDepositoAberto,
   depMes, setDepMes, depP1, setDepP1, depP2, setDepP2
@@ -14,14 +16,11 @@ export const HubScreen = ({
   const [mostrarExtratoCompleto, setMostrarExtratoCompleto] = useState(false);
   const [depLocal, setDepLocal] = useState('');
   
-  const [versiculoDia] = useState(() => {
-    return versiculos[Math.floor(Math.random() * versiculos.length)];
-  });
+  // Controle do seletor de cores
+  const [abrindoSeletor, setAbrindoSeletor] = useState<'p1' | 'p2' | null>(null);
 
-  const [fraseDia] = useState(() => {
-    return frases[Math.floor(Math.random() * frases.length)];
-  });
-
+  const [versiculoDia] = useState(() => versiculos[Math.floor(Math.random() * versiculos.length)]);
+  const [fraseDia] = useState(() => frases[Math.floor(Math.random() * frases.length)]);
   const [textoVersiculo, refVersiculo] = versiculoDia.split(' - ');
 
   const totalDesafioP1 = desafioP1.reduce((a: number, b: number) => a + b, 0);
@@ -36,17 +35,25 @@ export const HubScreen = ({
   const percP1 = totalCofre > 0 ? (totalP1 / totalCofre) * 100 : 50;
   const percP2 = totalCofre > 0 ? (totalP2 / totalCofre) * 100 : 50;
 
-  // Unifica e ordena as movimentações pela data de criação real do Firebase
   const extratoUnificado = [
-    ...contribuicoes.map((c: any) => ({
-      id: c.id,
-      tipo: 'entrada',
-      titulo: 'Depósito',
-      data: c.mesData,
-      valor: Number(c.p1Contr || 0) + Number(c.p2Contr || 0),
-      detalhe: `${c.local ? `${c.local} | ` : ''}${parceiro1}: ${formatMoney(c.p1Contr || 0)} - ${parceiro2}: ${formatMoney(c.p2Contr || 0)}`,
-      timestamp: c.createdAt?.toMillis() || 0
-    })),
+    ...contribuicoes.map((c: any) => {
+      const vP1 = Number(c.p1Contr || 0);
+      const vP2 = Number(c.p2Contr || 0);
+      let detalheDepositantes = '';
+      if (vP1 > 0 && vP2 === 0) detalheDepositantes = `Aporte de ${parceiro1}`;
+      else if (vP2 > 0 && vP1 === 0) detalheDepositantes = `Aporte de ${parceiro2}`;
+      else detalheDepositantes = `${parceiro1}: ${formatMoney(vP1)} | ${parceiro2}: ${formatMoney(vP2)}`;
+
+      return {
+        id: c.id,
+        tipo: 'entrada',
+        titulo: 'Depósito no Cofre',
+        data: c.mesData || 'Mês Atual',
+        valor: vP1 + vP2,
+        detalhe: `${c.local ? `${c.local} • ` : ''}${detalheDepositantes}`,
+        timestamp: c.createdAt?.toMillis() || 0
+      };
+    }),
     ...despesasRapidas.map((d: any) => ({
       id: d.id,
       tipo: 'saida',
@@ -56,216 +63,202 @@ export const HubScreen = ({
       detalhe: `Pago por ${d.pagoPor}`,
       timestamp: d.createdAt?.toMillis() || 0
     }))
-  ].sort((a, b) => b.timestamp - a.timestamp); // Agora a ordenação funciona com os dados do Firebase
+  ].sort((a, b) => b.timestamp - a.timestamp);
 
   const extratoExibido = mostrarExtratoCompleto ? extratoUnificado : extratoUnificado.slice(0, 3);
 
-  // Função assíncrona conectada ao Firebase
   const handleSalvar = async () => {
-    if (!depP1 && !depP2) return;
+    const valor1 = Number(depP1 || 0);
+    const valor2 = Number(depP2 || 0);
+
+    if (valor1 === 0 && valor2 === 0) {
+      alert("Ei! Vocês precisam inserir um valor para depositar. 😉");
+      return;
+    }
     if (!casalId) {
       alert("Erro de conexão. Vínculo do casal não encontrado.");
       return;
     }
-
     try {
-      // Salva direto na nuvem. O useEffect do CasalTab vai atualizar a tela sozinho!
       await addDoc(collection(db, 'casais', casalId, 'contribuicoes'), {
-        mesData: depMes || 'Mês Atual',
-        local: depLocal || 'Não informado',
-        p1Contr: Number(depP1 || 0),
-        p2Contr: Number(depP2 || 0),
-        createdAt: serverTimestamp() // Cria uma data oficial do servidor do Google
+        mesData: depMes || new Date().toLocaleString('pt-BR', { month: 'long' }),
+        local: depLocal || 'Cofre Conjunto',
+        p1Contr: valor1,
+        p2Contr: valor2,
+        createdAt: serverTimestamp()
       });
-
-      // Limpa o formulário apenas se der sucesso
-      setNovoDepositoAberto(false); 
-      setDepMes(''); 
-      setDepP1(''); 
-      setDepP2('');
-      setDepLocal('');
+      setNovoDepositoAberto(false); setDepMes(''); setDepP1(''); setDepP2(''); setDepLocal('');
     } catch (error) {
       console.error("Erro ao salvar depósito:", error);
       alert("Houve um erro ao salvar seu depósito. Tente novamente.");
     }
   };
 
+  // ✨ FUNÇÃO PARA TROCAR A COR DE PERFIL
+  const alterarCor = async (cor: string) => {
+    if (!casalId || !abrindoSeletor) return;
+    try {
+      const campoCor = abrindoSeletor === 'p1' ? 'corP1' : 'corP2';
+      await updateDoc(doc(db, 'casais', casalId), { [campoCor]: cor });
+      setAbrindoSeletor(null);
+    } catch (error) {
+      console.error("Erro ao alterar cor:", error);
+    }
+  };
+
+  // ✨ VERIFICA SE A FOTO CLICADA É DO USUÁRIO LOGADO
+  const abrirSeletorSeguro = (perfil: 'p1' | 'p2', nomePerfil: string) => {
+    const meuNome = auth.currentUser?.displayName?.split(' ')[0];
+    if (meuNome === nomePerfil) {
+      setAbrindoSeletor(perfil);
+    } else {
+      alert(`Você só pode trocar a sua própria cor! Deixa a do(a) ${nomePerfil} em paz! 😂`);
+    }
+  };
+
+  // Renderiza a Letra se não tiver foto
+  const renderAvatar = (nome: string, fotoUrl: string | null, corFundo: string) => {
+    if (fotoUrl) return <img src={fotoUrl} alt={nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+    const inicial = nome ? nome.charAt(0).toUpperCase() : '?';
+    return (
+      <div style={{ width: '100%', height: '100%', background: corFundo, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.2rem', fontWeight: 'bold' }}>
+        {inicial}
+      </div>
+    );
+  };
+
   return (
-    <div className="hub-fintech-container animate-fade-in">
+    <div className="hub-fintech-container animate-fade-in" style={{ position: 'relative' }}>
       
-      {/* CAIXA DO VERSÍCULO - TOPO */}
-      <div style={{ 
-        display: 'flex',
-        gap: '16px',
-        background: 'var(--bg)', 
-        padding: '20px', 
-        marginBottom: '24px', 
-        borderRadius: '12px',
-        border: '1px solid var(--border)',
-        alignItems: 'flex-start'
-      }}>
-        {/* Ícone de Aspas */}
+      {/* VERSÍCULO */}
+      <div style={{ display: 'flex', gap: '16px', background: 'var(--bg)', padding: '20px', marginBottom: '24px', borderRadius: '12px', border: '1px solid var(--border)', alignItems: 'flex-start' }}>
         <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--border)" opacity="0.5" flexShrink="0">
           <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
         </svg>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontStyle: 'italic', color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.5' }}>
-            "{textoVersiculo}"
-          </span>
-          {refVersiculo && (
-            <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              — {refVersiculo}
-            </span>
-          )}
+          <span style={{ fontStyle: 'italic', color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.5' }}>"{textoVersiculo}"</span>
+          {refVersiculo && <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>— {refVersiculo}</span>}
         </div>
       </div>
 
-      {/* 1. CARTÃO DE SALDO CENTRAL */}
-      <div className="hub-balance-card">
-        <div className="hub-balance-label">Saldo Conjunto</div>
-        <h1 className="hub-balance-value">{formatMoney(totalCofre)}</h1>
+      {/* SALDO CENTRAL COM FOTOS E CORES DINÂMICAS ✨ */}
+      <div className="hub-balance-card" style={{ position: 'relative', paddingTop: '40px' }}>
         
+        {/* CONTAINER DOS AVATARES */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'absolute', top: '-28px', left: '0', right: '0' }}>
+          
+          {/* Avatar Parceiro 1 */}
+          <div 
+            onClick={() => abrirSeletorSeguro('p1', parceiro1)}
+            style={{ zIndex: 2, width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP1}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }}
+            title="Mudar minha cor"
+          >
+            {renderAvatar(parceiro1, fotoP1, corP1)}
+          </div>
+          
+          {/* Avatar Parceiro 2 (Sobreposto) */}
+          <div 
+            onClick={() => abrirSeletorSeguro('p2', parceiro2)}
+            style={{ zIndex: 1, marginLeft: '-16px', width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP2}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }}
+            title="Mudar minha cor"
+          >
+            {renderAvatar(parceiro2, fotoP2, corP2)}
+          </div>
+
+        </div>
+
+        <div className="hub-balance-label">Cofre de {parceiro1} & {parceiro2}</div>
+        <h1 className="hub-balance-value" style={{ marginTop: '4px' }}>{formatMoney(totalCofre)}</h1>
+        
+        {/* BARRA COM AS CORES ESCOLHIDAS */}
         <div className="split-bar-container" style={{ width: '100%', maxWidth: '350px', height: '10px', marginBottom: '20px' }}>
-          <div className="split-p1" style={{ width: `${percP1}%` }}></div>
-          <div className="split-p2" style={{ width: `${percP2}%` }}></div>
+          <div className="split-p1" style={{ width: `${percP1}%`, background: corP1 }}></div>
+          <div className="split-p2" style={{ width: `${percP2}%`, background: corP2 }}></div>
         </div>
         
-        {/* NOVA ÁREA DE INFORMAÇÕES INDIVIDUAIS */}
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '350px', fontSize: '0.9rem' }}>
-          {/* Informações Parceiro 1 */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', fontWeight: 600 }}>
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent)' }}></span> 
-              {parceiro1}
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: corP1 }}></span> {parceiro1}
             </span>
             <span style={{ color: 'var(--text)' }}>{formatMoney(totalP1)}</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8 }}>{percP1.toFixed(1)}% do total</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8 }}>{percP1.toFixed(1)}%</span>
           </div>
 
-          {/* Informações Parceiro 2 */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', fontWeight: 600 }}>
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981' }}></span> 
-              {parceiro2}
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: corP2 }}></span> {parceiro2}
             </span>
             <span style={{ color: 'var(--text)' }}>{formatMoney(totalP2)}</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8 }}>{percP2.toFixed(1)}% do total</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8 }}>{percP2.toFixed(1)}%</span>
           </div>
         </div>
       </div>
 
-      {/* 2. ATALHOS RÁPIDOS */}
-      <div className="hub-actions-wrapper">
-        <div className="hub-actions-list">
-          
-          <div className="action-btn" onClick={() => setNovoDepositoAberto(!novoDepositoAberto)} style={{ borderColor: novoDepositoAberto ? 'var(--accent)' : 'var(--border)' }}>
-            <div className="action-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
+      {/* SELETOR DE CORES MODAL ✨ */}
+      {abrindoSeletor && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border)', maxWidth: '320px', width: '100%', textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-h)' }}>Sua Cor de Perfil</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '24px' }}>
+              {PALETA_DE_CORES.map(cor => (
+                <div 
+                  key={cor} 
+                  onClick={() => alterarCor(cor)}
+                  style={{ width: '40px', height: '40px', borderRadius: '50%', background: cor, cursor: 'pointer', border: '2px solid var(--bg)', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', margin: '0 auto' }}
+                />
+              ))}
             </div>
-            <span className="action-label">Depositar</span>
+            <button onClick={() => setAbrindoSeletor(null)} style={{ width: '100%', padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+              Cancelar
+            </button>
           </div>
-          
-          <div className="action-btn" onClick={() => setActiveView('desafio200')}>
-            <div className="action-icon" style={{ color: '#f59e0b' }}>
-              {/* Ícone de Troféu para o Acelerador */}
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
-                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
-                <path d="M4 22h16"></path>
-                <path d="M10 14.66V17c0 .55-.47.98-1 1.05l-3.91.52"></path>
-                <path d="M14 14.66V17c0 .55.47.98 1 1.05l3.91.52"></path>
-                <path d="M18 4v5c0 3.31-2.69 6-6 6s-6-2.69-6-6V4z"></path>
-              </svg>
-            </div>
-            <span className="action-label">Acelerador</span>
-          </div>
-          
-          <div className="action-btn" onClick={() => setActiveView('lazer')}>
-            <div className="action-icon" style={{ color: '#ec4899' }}>
-              {/* Ícone de Sorriso para o Lazer */}
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
-                <line x1="9" y1="9" x2="9.01" y2="9"></line>
-                <line x1="15" y1="9" x2="15.01" y2="9"></line>
-              </svg>
-            </div>
-            <span className="action-label">Lazer</span>
-          </div>
-
-          <div className="action-btn" onClick={() => setActiveView('metas')}>
-            <div className="action-icon" style={{ color: '#8b5cf6' }}>
-              {/* Ícone de Estrela para Metas */}
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-              </svg>
-            </div>
-            <span className="action-label">Metas</span>
-          </div>
-
-          {/* BALANÇA COMENTADA / INATIVADA 
-          <div className="action-btn" onClick={() => setActiveView('equilibrio')}>
-            <div className="action-icon" style={{ color: '#3b82f6' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3v18"></path><rect x="3" y="15" width="6" height="6" rx="1"></rect><rect x="15" y="15" width="6" height="6" rx="1"></rect><path d="M12 7l-9 4"></path><path d="M12 7l9 4"></path>
-              </svg>
-            </div>
-            <span className="action-label">Balança</span>
-          </div>
-          */}
-        </div>
-      </div>
-
-      {/* MODAL DE DEPÓSITO */}
-      {novoDepositoAberto && (
-        <div className="simulator-box animate-fade-in" style={{ padding: '24px' }}>
-          <h4 style={{ margin: '0 0 16px 0', color: 'var(--accent)' }}>Registrar Depósito</h4>
-          <div className="simulator-row"><span>Mês/Ref.</span><input type="text" value={depMes} onChange={e => setDepMes(e.target.value)} placeholder="Ex: Março" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
-          <div className="simulator-row"><span>Instituição/Local</span><input type="text" value={depLocal} onChange={e => setDepLocal(e.target.value)} placeholder="Ex: Poupança, Nubank" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
-          <div className="simulator-row"><span>Valor {parceiro1}</span><input type="number" value={depP1} onChange={e => setDepP1(e.target.value)} placeholder="0,00" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
-          <div className="simulator-row"><span>Valor {parceiro2}</span><input type="number" value={depP2} onChange={e => setDepP2(e.target.value)} placeholder="0,00" style={{ width: '130px', background: 'var(--bg)', color: 'var(--text-h)', padding: '8px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
-          <button className="primary" onClick={handleSalvar} style={{ width: '100%', marginTop: '16px', padding: '14px', borderRadius: '8px', border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Salvar</button>
         </div>
       )}
 
-      {/* CAIXA DA FRASE - ANTES DO EXTRATO */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        borderLeft: '3px solid #8b5cf6',
-        background: 'rgba(139, 92, 246, 0.05)', 
-        padding: '16px',
-        marginBottom: '24px',
-        borderRadius: '0 8px 8px 0',
-      }}>
-        {/* Ícone de Lâmpada / Insight */}
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" flexShrink="0">
-          <circle cx="12" cy="12" r="4"></circle>
-          <path d="M12 2v2"></path>
-          <path d="M12 20v2"></path>
-          <path d="M4 12H2"></path>
-          <path d="M22 12h-2"></path>
-          <path d="M19.07 4.93l-1.41 1.41"></path>
-          <path d="M6.34 17.66l-1.41 1.41"></path>
-          <path d="M19.07 19.07l-1.41-1.41"></path>
-          <path d="M6.34 6.34l-1.41 1.41"></path>
-        </svg>
-        <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.9rem', fontWeight: 500 }}>
-          {fraseDia}
-        </p>
+      {/* ATALHOS RÁPIDOS */}
+      <div className="hub-actions-wrapper">
+        <div className="hub-actions-list">
+          <div className="action-btn" onClick={() => setNovoDepositoAberto(!novoDepositoAberto)} style={{ borderColor: novoDepositoAberto ? corP1 : 'var(--border)' }}>
+            <div className="action-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+            <span className="action-label">Depositar</span>
+          </div>
+          <div className="action-btn" onClick={() => setActiveView('desafio200')}>
+            <div className="action-icon" style={{ color: '#f59e0b' }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-1 1.05l-3.91.52"></path><path d="M14 14.66V17c0 .55.47.98 1 1.05l3.91.52"></path><path d="M18 4v5c0 3.31-2.69 6-6 6s-6-2.69-6-6V4z"></path></svg></div>
+            <span className="action-label">Acelerador</span>
+          </div>
+          <div className="action-btn" onClick={() => setActiveView('lazer')}>
+            <div className="action-icon" style={{ color: '#ec4899' }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg></div>
+            <span className="action-label">Lazer</span>
+          </div>
+          <div className="action-btn" onClick={() => setActiveView('metas')}>
+            <div className="action-icon" style={{ color: '#8b5cf6' }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></div>
+            <span className="action-label">Metas</span>
+          </div>
+        </div>
       </div>
 
-      {/* 3. EXTRATO (LISTA) */}
+      {/* RESTANTE DO CÓDIGO DO HUB (DEPOSITAR E EXTRATO) MANTIDO IGUAL */}
+      {novoDepositoAberto && (
+        <div className="simulator-box animate-fade-in" style={{ padding: '24px' }}>
+          <h4 style={{ margin: '0 0 16px 0', color: 'var(--text-h)' }}>Registrar Depósito</h4>
+          <div className="simulator-row"><span>Mês/Ref.</span><input type="text" value={depMes} onChange={e => setDepMes(e.target.value)} placeholder="Ex: Março" style={{ width: '140px', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
+          <div className="simulator-row"><span>Local (Opcional)</span><input type="text" value={depLocal} onChange={e => setDepLocal(e.target.value)} placeholder="Ex: Nubank" style={{ width: '140px', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
+          <div className="simulator-row"><span>Valor {parceiro1}</span><input type="number" value={depP1} onChange={e => setDepP1(e.target.value)} placeholder="R$ 0,00" style={{ width: '140px', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
+          <div className="simulator-row"><span>Valor {parceiro2}</span><input type="number" value={depP2} onChange={e => setDepP2(e.target.value)} placeholder="R$ 0,00" style={{ width: '140px', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
+          <button className="primary" onClick={handleSalvar} style={{ width: '100%', marginTop: '16px', padding: '14px', borderRadius: '8px', border: 'none', background: corP1, color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Confirmar Depósito</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderLeft: `3px solid ${corP1}`, background: 'rgba(139, 92, 246, 0.05)', padding: '16px', marginBottom: '24px', borderRadius: '0 8px 8px 0' }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={corP1} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" flexShrink="0"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4 12H2"></path><path d="M22 12h-2"></path><path d="M19.07 4.93l-1.41 1.41"></path><path d="M6.34 17.66l-1.41 1.41"></path><path d="M19.07 19.07l-1.41-1.41"></path><path d="M6.34 6.34l-1.41 1.41"></path></svg>
+        <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.9rem', fontWeight: 500 }}>{fraseDia}</p>
+      </div>
+
       <div className="extrato-container">
         <div className="extrato-header">
           <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Últimas Movimentações</h3>
-          <button 
-            onClick={() => setMostrarExtratoCompleto(!mostrarExtratoCompleto)} 
-            style={{ background: 'transparent', border: 'none', color: 'var(--accent)', fontWeight: 'bold', cursor: 'pointer' }}
-          >
+          <button onClick={() => setMostrarExtratoCompleto(!mostrarExtratoCompleto)} style={{ background: 'transparent', border: 'none', color: corP1, fontWeight: 'bold', cursor: 'pointer' }}>
             {mostrarExtratoCompleto ? 'Ocultar' : 'Ver tudo'}
           </button>
         </div>
@@ -294,7 +287,6 @@ export const HubScreen = ({
           )}
         </div>
       </div>
-
     </div>
   );
 };
