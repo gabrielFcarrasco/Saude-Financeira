@@ -302,7 +302,7 @@ export const OrcamentoLivreScreen = ({
                     <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)' }}>QUEM PAGOU?</label>
                     <select value={quemPagouReal} onChange={e => setQuemPagouReal(e.target.value)} style={{ width: '100%', padding: '16px', marginTop: '8px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
                       <option value="ambos">Nós dois dividimos</option>
-       value={parceiro1}>{parceiro1} pagou tudo</option>
+                      <option value={parceiro1}>{parceiro1} pagou tudo</option>
                       <option value={parceiro2}>{parceiro2} pagou tudo</option>
                     </select>
                   </div>
