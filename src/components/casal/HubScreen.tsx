@@ -14,11 +14,12 @@ export const HubScreen = ({
 }: any) => {
 
   const [mostrarExtratoCompleto, setMostrarExtratoCompleto] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
   
-  // ✨ Estados do Novo Modal Minimalista
+  // ✨ NOVO: Estado do Alerta Personalizado (Substitui o alert feio e o toast)
+  const [alertMsg, setAlertMsg] = useState('');
+  
   const [valorDeposito, setValorDeposito] = useState('');
-  const [dataDeposito, setDataDeposito] = useState(new Date().toISOString().split('T')[0]); // Data de Hoje Padrão
+  const [dataDeposito, setDataDeposito] = useState(new Date().toISOString().split('T')[0]); 
   const [bancoSelecionado, setBancoSelecionado] = useState('Nubank');
   const [depMetaDestino, setDepMetaDestino] = useState('');
 
@@ -41,11 +42,6 @@ export const HubScreen = ({
   const percP1 = totalCofre > 0 ? (totalP1 / totalCofre) * 100 : 50;
   const percP2 = totalCofre > 0 ? (totalP2 / totalCofre) * 100 : 50;
   const minhaCor = currentUserRole === 'p1' ? corP1 : corP2;
-
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(''), 4000);
-  };
 
   const extratoUnificado = [
     ...contribuicoes.map((c: any) => {
@@ -79,22 +75,19 @@ export const HubScreen = ({
 
   const extratoExibido = mostrarExtratoCompleto ? extratoUnificado : extratoUnificado.slice(0, 3);
 
-  // ✨ SALVAR DEPÓSITO DO USUÁRIO
   const handleSalvar = async () => {
     const valorNum = Number(valorDeposito || 0);
 
-    if (valorNum <= 0) return showToast("Ei! Insira um valor maior que zero. 😉");
-    if (!casalId) return showToast("Erro de conexão com o cofre.");
+    if (valorNum <= 0) return setAlertMsg("Ei! Insira um valor maior que zero para depositar. 😉");
+    if (!casalId) return setAlertMsg("Erro de conexão com o cofre.");
     
     try {
       setIsProcessando(true);
       
       const v1 = currentUserRole === 'p1' ? valorNum : 0;
       const v2 = currentUserRole === 'p2' ? valorNum : 0;
-      
       const dataFormatada = dataDeposito ? new Date(dataDeposito + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'Hoje';
 
-      // 1. Salva no cofre
       await addDoc(collection(db, 'casais', casalId, 'contribuicoes'), {
         mesData: dataFormatada,
         local: bancoSelecionado,
@@ -103,7 +96,6 @@ export const HubScreen = ({
         createdAt: serverTimestamp()
       });
 
-      // 2. Joga para a Meta se escolheu uma
       if (depMetaDestino) {
         const metaEscolhida = metas.find((m: any) => m.id === depMetaDestino);
         if (metaEscolhida) {
@@ -125,11 +117,11 @@ export const HubScreen = ({
       setValorDeposito('');
       setDataDeposito(new Date().toISOString().split('T')[0]);
       setDepMetaDestino('');
-      showToast("Depósito salvo com sucesso! 🎉");
+      setAlertMsg("Depósito salvo com sucesso! 🎉");
       
     } catch (error) {
       console.error("Erro ao salvar:", error);
-      showToast("Houve um erro ao salvar seu depósito.");
+      setAlertMsg("Houve um erro ao salvar seu depósito.");
     } finally {
       setIsProcessando(false);
     }
@@ -146,7 +138,7 @@ export const HubScreen = ({
 
   const abrirSeletorSeguro = (perfil: 'p1' | 'p2', nomePerfil: string) => {
     if (meuNome === nomePerfil) setAbrindoSeletor(perfil);
-    else showToast(`Você só pode trocar a sua própria cor! Deixa a do(a) ${nomePerfil} em paz! 😂`);
+    else setAlertMsg(`Você só pode trocar a sua própria cor! Deixa a do(a) ${nomePerfil} em paz! 😂`);
   };
 
   const renderAvatar = (nome: string, fotoUrl: string | null, corFundo: string) => {
@@ -157,10 +149,23 @@ export const HubScreen = ({
   return (
     <div className="hub-fintech-container animate-fade-in" style={{ position: 'relative' }}>
       
-      {/* ✨ TOAST DE NOTIFICAÇÃO ANIMADO */}
-      {toastMsg && (
-        <div className="animate-slide-up" style={{ position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', background: 'var(--text-h)', color: 'var(--bg)', padding: '14px 24px', borderRadius: '30px', zIndex: 9999, fontWeight: 'bold', fontSize: '0.9rem', boxShadow: '0 8px 16px rgba(0,0,0,0.3)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>ℹ️</span> {toastMsg}
+      {/* ✨ O NOVO ALERTA PERSONALIZADO LINDÃO */}
+      {alertMsg && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: '20px' }}>
+          <div className="animate-slide-up" style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '24px', padding: '32px 24px', maxWidth: '320px', width: '100%', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontSize: '3.5rem', marginBottom: '16px' }}>
+              {alertMsg.includes('sucesso') || alertMsg.includes('🎉') ? '✅' : alertMsg.includes('paz') || alertMsg.includes('😂') ? '🕵️‍♂️' : '⚠️'}
+            </div>
+            <h3 style={{ margin: '0 0 12px 0', color: 'var(--text-h)' }}>
+              {alertMsg.includes('sucesso') ? 'Tudo certo!' : alertMsg.includes('paz') ? 'Opa, pera lá!' : 'Aviso'}
+            </h3>
+            <p style={{ color: 'var(--text)', marginBottom: '24px', lineHeight: '1.5', fontSize: '0.95rem' }}>
+              {alertMsg}
+            </p>
+            <button onClick={() => setAlertMsg('')} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: minhaCor, color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer' }}>
+              Entendi
+            </button>
+          </div>
         </div>
       )}
 
@@ -241,7 +246,6 @@ export const HubScreen = ({
         </div>
       </div>
 
-      {/* ✨ MODAL DE DEPÓSITO PENSADO PARA MOBILE (APENAS O USUÁRIO) */}
       {novoDepositoAberto && (
         <div className="simulator-box animate-fade-in" style={{ padding: '24px' }}>
           <h4 style={{ margin: '0 0 16px 0', color: 'var(--text-h)' }}>Registrar Depósito</h4>

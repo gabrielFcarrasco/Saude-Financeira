@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { doc, updateDoc, addDoc, collection, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { auth, db } from '../../services/firebase';
@@ -9,7 +9,15 @@ export const OrcamentoLivreScreen = ({
 }: any) => {
   
   const [isProcessando, setIsProcessando] = useState(false);
+  
+  // ✨ Estados da IA (Dica Rápida e Análise Completa)
   const [mensagemIA, setMensagemIA] = useState('');
+  const [dicaRapida, setDicaRapida] = useState('');
+  const [carregandoDica, setCarregandoDica] = useState(true);
+  
+  const [modalIAAberto, setModalIAAberto] = useState(false);
+  const [insightCompletoIA, setInsightCompletoIA] = useState('');
+  const [carregandoIACompleta, setCarregandoIACompleta] = useState(false);
   
   // Estados do Simulador/Editor
   const [simuladorAberto, setSimuladorAberto] = useState(false);
@@ -36,15 +44,96 @@ export const OrcamentoLivreScreen = ({
   const porcentagemUso = Math.min((gastoEPlanejado / limiteMensalLazer) * 100, 100);
   const totalSimulacao = simItems.reduce((acc: number, curr: any) => acc + Number(curr.valor || 0), 0);
 
-  // Lógica para saber quantos dias faltam para o próximo mês (Dia 1)
   const hoje = new Date();
   const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
   const diasParaRenovar = ultimoDiaMes - hoje.getDate() + 1;
 
   // ==========================================
-  // FUNÇÕES DE AÇÃO
+  // ✨ IA: DICA RÁPIDA (PROATIVA) AO ABRIR O ECRÃ
   // ==========================================
+  useEffect(() => {
+    let isMounted = true;
+    const buscarDicaRapida = async () => {
+      if (!casalId) return;
+      try {
+        const prompt = `Atue como um conselheiro financeiro de casais. O casal ${parceiro1} e ${parceiro2} tem um limite de lazer mensal de R$ ${limiteMensalLazer}. Já comprometeram R$ ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias. Escreva UMA dica urgente, rápida e muito interessante (máximo 2 linhas) para eles lerem agora. Seja amigável, direto ao ponto e use 1 emoji. Avalie se estão bem de saldo ou se precisam de travar os gastos.`;
+        
+        const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
+        const funcIA = httpsCallable(funcoesNuvem, 'gerarInsightFinanceiro');
+        const resposta = await funcIA({ prompt });
+        
+        if (isMounted && (resposta.data as any)?.insight) {
+          setDicaRapida((resposta.data as any).insight);
+        }
+      } catch (e) {
+        if (isMounted) setDicaRapida("Mantenham o foco! Conversem sobre os próximos passos para aproveitarem o mês da melhor forma. 🚀");
+      } finally {
+        if (isMounted) setCarregandoDica(false);
+      }
+    };
+    
+    buscarDicaRapida();
+    return () => { isMounted = false; };
+  }, [casalId, parceiro1, parceiro2]); 
+  // Nota: Deixámos poucas dependências para a IA não gerar custos desnecessários a cada clique na interface.
 
+  // ==========================================
+  // IA: ANÁLISE COMPLETA (NO MODAL)
+  // ==========================================
+  const gerarAnaliseCompleta = async () => {
+    setModalIAAberto(true);
+    setCarregandoIACompleta(true);
+    setInsightCompletoIA('');
+
+    try {
+      const historicoStr = saidas.filter((s:any) => s.status === 'concluido').map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Nenhum passeio concluído ainda';
+      const planejadosStr = saidas.filter((s:any) => s.status === 'planejado').map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Nenhum passeio planejado';
+
+      const prompt = `Atue como um conselheiro financeiro de casais moderno e empático.
+      O casal é ${parceiro1} e ${parceiro2}. Eles possuem um orçamento de lazer mensal de R$ ${limiteMensalLazer}.
+      Eles já gastaram ou planejaram ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias do mês.
+      Histórico de passeios recentes: ${historicoStr}.
+      Próximos passeios que planejaram: ${planejadosStr}.
+
+      Faça uma análise profunda do ritmo financeiro deles neste momento. Formate a resposta em 3 pequenos parágrafos:
+      1. Diagnóstico: Diga se o dinheiro vai durar até o fim do mês e elogie ou alerte sobre o ritmo de gastos.
+      2. Dica de Casal: Uma dica financeira prática e personalizada baseada no histórico deles.
+      3. Ideia de Date: Sugira um passeio económico, caseiro ou gratuito que combine com o estilo de saídas que eles já tiveram.
+      
+      Use uma linguagem jovem, direta e coloque alguns emojis.`;
+
+      const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
+      const funcIA = httpsCallable(funcoesNuvem, 'gerarInsightFinanceiro');
+      const resposta = await funcIA({ prompt });
+      
+      if ((resposta.data as any)?.insight) {
+        setInsightCompletoIA((resposta.data as any).insight);
+      } else {
+        setInsightCompletoIA("Não consegui gerar a análise agora. Tente de novo em alguns minutos!");
+      }
+    } catch (e) {
+      console.error(e);
+      setInsightCompletoIA("Puts, a ligação com o servidor falhou. Verifique a sua internet!");
+    } finally {
+      setCarregandoIACompleta(false);
+    }
+  };
+
+  const gerarMensagemSobraComIA = async (valor: number, passeio: string) => {
+    setMensagemIA(`Aí sim! Sobrou dinheiro do passeio! Que tal jogar essa grana extra direto na meta de vocês? 🚀`);
+    try {
+      const prompt = `${parceiro1} e ${parceiro2} economizaram R$ ${valor} no passeio "${passeio}". O limite deles é R$ ${limiteMensalLazer} e ainda restam R$ ${restanteLazer} no mês, faltando ${diasParaRenovar} dias para virar o mês. Escreva uma frase curta (máximo 2 linhas), bem animada e personalizada, comemorando essa economia e sugerindo guardar o valor ou aproveitar de forma inteligente.`;
+      
+      const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
+      const funcIA = httpsCallable(funcoesNuvem, 'gerarInsightFinanceiro');
+      const resposta = await funcIA({ prompt });
+      if ((resposta.data as any)?.insight) setMensagemIA((resposta.data as any).insight);
+    } catch (e) {}
+  };
+
+  // ==========================================
+  // FUNÇÕES DE AÇÃO DO ORÇAMENTO
+  // ==========================================
   const handleSalvarLimite = async () => {
     if (!casalId || !novoLimiteInput) return;
     try {
@@ -96,13 +185,21 @@ export const OrcamentoLivreScreen = ({
   };
 
   const handleExcluirPlano = async (id: string) => {
-    if (!window.confirm("Deseja cancelar este planejamento?")) return;
+    if (!window.confirm("Deseja cancelar este planeamento?")) return;
     try {
       setIsProcessando(true);
       await deleteDoc(doc(db, 'casais', casalId, 'saidas', id));
       setSimuladorAberto(false);
     } catch (error) { console.error(error); }
     finally { setIsProcessando(false); }
+  };
+
+  const prepararConclusao = (saida: any) => {
+    setModalConcluir(saida);
+    setValorRealFinal(saida.estimado.toString());
+    setQuemPagouReal('ambos');
+    setPassoConclusao('pergunta');
+    setSobraDetectada(0);
   };
 
   const processarFim = async (confirmadoIgual: boolean) => {
@@ -129,7 +226,7 @@ export const OrcamentoLivreScreen = ({
       if (diferenca > 0) {
         setSobraDetectada(diferenca);
         setPassoConclusao('sobra');
-        setMensagemIA(`A economia de ${formatMoney(diferenca)} pode virar uma conquista maior se for para o Mapa dos Sonhos! 🚀`);
+        gerarMensagemSobraComIA(diferenca, modalConcluir.titulo);
       } else {
         fecharModal();
       }
@@ -138,6 +235,19 @@ export const OrcamentoLivreScreen = ({
   };
 
   const fecharModal = () => { setModalConcluir(null); setMensagemIA(''); };
+
+  const investirSobra = async () => {
+    if (metas.length === 0) return alert("Crie uma meta primeiro!");
+    try {
+      setIsProcessando(true);
+      const meta = metas[0];
+      await updateDoc(doc(db, 'casais', casalId, 'metas', meta.id), {
+        atual: meta.atual + sobraDetectada,
+        historico: [{ id: Date.now().toString(), data: 'Hoje', valor: sobraDetectada, descricao: `Sobra: ${modalConcluir?.titulo}` }, ...(meta.historico || [])]
+      });
+      fecharModal();
+    } catch (e) {} finally { setIsProcessando(false); }
+  };
 
   return (
     <div className="hub-fintech-container animate-fade-in" style={{ paddingBottom: '120px' }}>
@@ -150,12 +260,12 @@ export const OrcamentoLivreScreen = ({
         <h2 style={{ color: 'var(--text-h)', margin: '0 0 8px 0' }}>Orçamento de Lazer 🍿</h2>
         <p style={{ color: 'var(--text)', fontSize: '0.95rem', lineHeight: '1.5', margin: 0 }}>
           {restanteLazer > 0 
-            ? `Olá! Vocês ainda têm ${formatMoney(restanteLazer)} para aproveitar o mês. Use este espaço para planejar jantares, cinema ou viagens sem comprometer o essencial.`
-            : `Atenção! Vocês já comprometeram todo o orçamento de lazer deste mês. Que tal planejar algo caseiro para economizar?`}
+            ? `Olá! Vocês ainda têm ${formatMoney(restanteLazer)} para aproveitar. Planejem os passeios aqui para viver o agora sem comprometer o futuro.`
+            : `Atenção! O orçamento deste mês acabou. Que tal pedir uma análise ao co-piloto e focar em programações caseiras?`}
         </p>
       </div>
 
-      {/* 2. CARD DE LIMITE (COM EDIÇÃO E CONTAGEM REGRESSIVA) */}
+      {/* 2. CARD DE LIMITE */}
       <div className="hub-balance-card" style={{ padding: '24px', marginBottom: '24px', position: 'relative' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
@@ -184,15 +294,33 @@ export const OrcamentoLivreScreen = ({
         </div>
       </div>
 
-      {/* 3. DICA DO CO-PILOTO */}
-      <div style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', padding: '16px', borderRadius: '16px', marginBottom: '24px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-        <div style={{ fontSize: '1.5rem' }}>💡</div>
-        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text)', lineHeight: '1.4' }}>
-          <strong>Dica:</strong> Se não usarem todo o valor, tentem não "gastar por gastar". O que sobra aqui pode ser o combustível para o próximo <strong>Sonho</strong> de vocês!
-        </p>
+      {/* ✨ 3. NOVO CARTÃO DA IA PROATIVA (DICA RÁPIDA) */}
+      <div style={{ background: 'linear-gradient(145deg, var(--code-bg) 0%, rgba(139, 92, 246, 0.05) 100%)', border: '1px solid rgba(139, 92, 246, 0.2)', borderRadius: '24px', padding: '24px', marginBottom: '32px', position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ width: 40, height: 40, background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          </div>
+          <h3 style={{ margin: 0, color: 'var(--accent)', fontSize: '1.1rem' }}>O Co-piloto sugere...</h3>
+        </div>
+        
+        {carregandoDica ? (
+          <div style={{ display: 'flex', gap: '6px', padding: '10px 0', alignItems: 'center' }}>
+            <div className="typing-dot" style={{ background: 'var(--text)' }}></div>
+            <div className="typing-dot" style={{ background: 'var(--text)' }}></div>
+            <div className="typing-dot" style={{ background: 'var(--text)' }}></div>
+          </div>
+        ) : (
+          <p style={{ margin: '0 0 20px 0', fontSize: '1rem', color: 'var(--text-h)', lineHeight: '1.5', fontStyle: 'italic' }}>
+            "{dicaRapida}"
+          </p>
+        )}
+
+        <button onClick={gerarAnaliseCompleta} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: 'var(--bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '0.95rem', cursor: 'pointer', transition: '0.2s', display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }}>
+          Saber mais e ver ideias de passeio 💡
+        </button>
       </div>
 
-      {/* 4. BOTÃO ADICIONAR */}
+      {/* 4. BOTÃO ADICIONAR ROTEIRO */}
       {!simuladorAberto && (
         <button onClick={abrirNovoPlano} style={{ width: '100%', padding: '18px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', marginBottom: '32px', boxShadow: '0 6px 20px rgba(139, 92, 246, 0.3)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -200,7 +328,7 @@ export const OrcamentoLivreScreen = ({
         </button>
       )}
 
-      {/* SIMULADOR / EDITOR (BOTÕES GRANDES) */}
+      {/* SIMULADOR / EDITOR */}
       {simuladorAberto && (
         <div className="animate-fade-in" style={{ background: 'var(--code-bg)', border: '2px solid var(--accent)', borderRadius: '24px', padding: '24px', marginBottom: '32px' }}>
           <h4 style={{ margin: '0 0 20px 0', color: 'var(--accent)' }}>{idEdicao ? 'Ajustar Detalhes' : 'O que vamos aprontar?'}</h4>
@@ -275,7 +403,44 @@ export const OrcamentoLivreScreen = ({
         ))}
       </div>
 
-      {/* MODAL DE CONCLUSÃO (REFORMULADO) */}
+      {/* ✨ MODAL DE ANÁLISE DETALHADA DA IA */}
+      {modalIAAberto && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
+          <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '32px 24px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            
+            <div style={{ width: '50px', height: '5px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px', flexShrink: 0 }}></div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexShrink: 0 }}>
+              <div style={{ width: 48, height: 48, background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Análise do Co-piloto</h3>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Personalizada para {parceiro1} & {parceiro2}</span>
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', marginBottom: '24px' }}>
+              {carregandoIACompleta ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '16px' }}>
+                  <div className="spinner" style={{ width: '32px', height: '32px', borderTopColor: 'var(--accent)' }}></div>
+                  <p style={{ color: 'var(--text)', fontSize: '0.9rem', textAlign: 'center' }}>Analisando os seus gastos, histórico de passeios e calculando os dias restantes...</p>
+                </div>
+              ) : (
+                <div style={{ color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                  {insightCompletoIA}
+                </div>
+              )}
+            </div>
+
+            <button onClick={() => setModalIAAberto(false)} style={{ width: '100%', padding: '18px', borderRadius: '16px', background: 'var(--code-bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '1rem', flexShrink: 0 }}>
+              Fechar Análise
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONCLUSÃO DE PASSEIO (SOBRA) */}
       {modalConcluir && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(10px)' }}>
           <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '32px 24px 60px' }}>
@@ -284,7 +449,7 @@ export const OrcamentoLivreScreen = ({
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px' }}></div>
                 <h3 style={{ margin: '0 0 12px 0' }}>Como foi o passeio? 🍕</h3>
-                <p style={{ color: 'var(--text)', marginBottom: '32px' }}>Gastaram os <strong>{formatMoney(modalConcluir.estimado)}</strong> que planejaram?</p>
+                <p style={{ color: 'var(--text)', marginBottom: '32px' }}>Gastaram os <strong>{formatMoney(modalConcluir.estimado)}</strong> que planearam?</p>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <button onClick={() => processarFim(true)} style={{ padding: '20px', borderRadius: '18px', background: '#10b981', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1.1rem' }}>Sim, certinho!</button>
@@ -330,8 +495,8 @@ export const OrcamentoLivreScreen = ({
                    <p style={{ margin: 0, fontStyle: 'italic', fontSize: '0.95rem', color: 'var(--text-h)' }}>"{mensagemIA}"</p>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <button onClick={fecharModal} style={{ padding: '20px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold' }}>Continuar Economizando!</button>
-                  <button onClick={fecharModal} style={{ padding: '20px', borderRadius: '18px', background: 'var(--code-bg)', border: '1px solid var(--border)', color: 'var(--text-h)' }}>Beleza, entendi</button>
+                  <button onClick={investirSobra} style={{ padding: '20px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold' }}>Investir na Meta!</button>
+                  <button onClick={fecharModal} style={{ padding: '20px', borderRadius: '18px', background: 'var(--code-bg)', border: '1px solid var(--border)', color: 'var(--text-h)' }}>Beleza, deixar no saldo livre</button>
                 </div>
               </div>
             )}
