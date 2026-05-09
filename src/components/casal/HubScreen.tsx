@@ -7,7 +7,7 @@ const PALETA_DE_CORES = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', 
 
 export const HubScreen = ({ 
   setActiveView, parceiro1, parceiro2, fotoP1, fotoP2, corP1, corP2, formatMoney,
-  casalId, 
+  casalId, metas, // ✨ Agora estamos usando as metas aqui
   contribuicoes, setContribuicoes, despesasRapidas, 
   desafioP1, desafioP2, novoDepositoAberto, setNovoDepositoAberto,
   depMes, setDepMes, depP1, setDepP1, depP2, setDepP2
@@ -16,8 +16,11 @@ export const HubScreen = ({
   const [mostrarExtratoCompleto, setMostrarExtratoCompleto] = useState(false);
   const [depLocal, setDepLocal] = useState('');
   
-  // Controle do seletor de cores
+  // ✨ NOVO: Estado para saber pra onde o dinheiro vai
+  const [depMetaDestino, setDepMetaDestino] = useState('');
+
   const [abrindoSeletor, setAbrindoSeletor] = useState<'p1' | 'p2' | null>(null);
+  const [isProcessando, setIsProcessando] = useState(false);
 
   const [versiculoDia] = useState(() => versiculos[Math.floor(Math.random() * versiculos.length)]);
   const [fraseDia] = useState(() => frases[Math.floor(Math.random() * frases.length)]);
@@ -67,11 +70,13 @@ export const HubScreen = ({
 
   const extratoExibido = mostrarExtratoCompleto ? extratoUnificado : extratoUnificado.slice(0, 3);
 
+  // ✨ DEPÓSITO INTELIGENTE (COFRE + META AO MESMO TEMPO)
   const handleSalvar = async () => {
     const valor1 = Number(depP1 || 0);
     const valor2 = Number(depP2 || 0);
+    const totalDeposito = valor1 + valor2;
 
-    if (valor1 === 0 && valor2 === 0) {
+    if (totalDeposito === 0) {
       alert("Ei! Vocês precisam inserir um valor para depositar. 😉");
       return;
     }
@@ -79,7 +84,11 @@ export const HubScreen = ({
       alert("Erro de conexão. Vínculo do casal não encontrado.");
       return;
     }
+    
     try {
+      setIsProcessando(true);
+
+      // 1. Sempre salva no cofre (porque o dinheiro entrou)
       await addDoc(collection(db, 'casais', casalId, 'contribuicoes'), {
         mesData: depMes || new Date().toLocaleString('pt-BR', { month: 'long' }),
         local: depLocal || 'Cofre Conjunto',
@@ -87,14 +96,46 @@ export const HubScreen = ({
         p2Contr: valor2,
         createdAt: serverTimestamp()
       });
-      setNovoDepositoAberto(false); setDepMes(''); setDepP1(''); setDepP2(''); setDepLocal('');
+
+      // 2. Se selecionou uma meta, já joga o progresso para lá!
+      if (depMetaDestino) {
+        const metaEscolhida = metas.find((m: any) => m.id === depMetaDestino);
+        if (metaEscolhida) {
+          const metaRef = doc(db, 'casais', casalId, 'metas', depMetaDestino);
+          
+          let quemDepositou = '';
+          if (valor1 > 0 && valor2 === 0) quemDepositou = parceiro1;
+          else if (valor2 > 0 && valor1 === 0) quemDepositou = parceiro2;
+          else quemDepositou = 'Ambos';
+
+          const novoAporte = {
+            id: Date.now().toString(),
+            data: depMes || new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+            valor: totalDeposito,
+            descricao: `Depósito Direto (${quemDepositou})`
+          };
+
+          await updateDoc(metaRef, {
+            atual: metaEscolhida.atual + totalDeposito,
+            historico: [novoAporte, ...(metaEscolhida.historico || [])]
+          });
+        }
+      }
+
+      setNovoDepositoAberto(false); 
+      setDepMes(''); 
+      setDepP1(''); 
+      setDepP2(''); 
+      setDepLocal('');
+      setDepMetaDestino(''); // Reseta o seletor
     } catch (error) {
       console.error("Erro ao salvar depósito:", error);
       alert("Houve um erro ao salvar seu depósito. Tente novamente.");
+    } finally {
+      setIsProcessando(false);
     }
   };
 
-  // ✨ FUNÇÃO PARA TROCAR A COR DE PERFIL
   const alterarCor = async (cor: string) => {
     if (!casalId || !abrindoSeletor) return;
     try {
@@ -106,17 +147,12 @@ export const HubScreen = ({
     }
   };
 
-  // ✨ VERIFICA SE A FOTO CLICADA É DO USUÁRIO LOGADO
   const abrirSeletorSeguro = (perfil: 'p1' | 'p2', nomePerfil: string) => {
     const meuNome = auth.currentUser?.displayName?.split(' ')[0];
-    if (meuNome === nomePerfil) {
-      setAbrindoSeletor(perfil);
-    } else {
-      alert(`Você só pode trocar a sua própria cor! Deixa a do(a) ${nomePerfil} em paz! 😂`);
-    }
+    if (meuNome === nomePerfil) setAbrindoSeletor(perfil);
+    else alert(`Você só pode trocar a sua própria cor! Deixa a do(a) ${nomePerfil} em paz! 😂`);
   };
 
-  // Renderiza a Letra se não tiver foto
   const renderAvatar = (nome: string, fotoUrl: string | null, corFundo: string) => {
     if (fotoUrl) return <img src={fotoUrl} alt={nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
     const inicial = nome ? nome.charAt(0).toUpperCase() : '?';
@@ -141,36 +177,20 @@ export const HubScreen = ({
         </div>
       </div>
 
-      {/* SALDO CENTRAL COM FOTOS E CORES DINÂMICAS ✨ */}
+      {/* SALDO CENTRAL */}
       <div className="hub-balance-card" style={{ position: 'relative', paddingTop: '40px' }}>
-        
-        {/* CONTAINER DOS AVATARES */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'absolute', top: '-28px', left: '0', right: '0' }}>
-          
-          {/* Avatar Parceiro 1 */}
-          <div 
-            onClick={() => abrirSeletorSeguro('p1', parceiro1)}
-            style={{ zIndex: 2, width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP1}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }}
-            title="Mudar minha cor"
-          >
+          <div onClick={() => abrirSeletorSeguro('p1', parceiro1)} style={{ zIndex: 2, width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP1}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }} title="Mudar minha cor">
             {renderAvatar(parceiro1, fotoP1, corP1)}
           </div>
-          
-          {/* Avatar Parceiro 2 (Sobreposto) */}
-          <div 
-            onClick={() => abrirSeletorSeguro('p2', parceiro2)}
-            style={{ zIndex: 1, marginLeft: '-16px', width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP2}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }}
-            title="Mudar minha cor"
-          >
+          <div onClick={() => abrirSeletorSeguro('p2', parceiro2)} style={{ zIndex: 1, marginLeft: '-16px', width: '60px', height: '60px', borderRadius: '50%', border: `3px solid ${corP2}`, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', background: 'var(--bg)', cursor: 'pointer', transition: 'transform 0.2s' }} title="Mudar minha cor">
             {renderAvatar(parceiro2, fotoP2, corP2)}
           </div>
-
         </div>
 
         <div className="hub-balance-label">Cofre de {parceiro1} & {parceiro2}</div>
         <h1 className="hub-balance-value" style={{ marginTop: '4px' }}>{formatMoney(totalCofre)}</h1>
         
-        {/* BARRA COM AS CORES ESCOLHIDAS */}
         <div className="split-bar-container" style={{ width: '100%', maxWidth: '350px', height: '10px', marginBottom: '20px' }}>
           <div className="split-p1" style={{ width: `${percP1}%`, background: corP1 }}></div>
           <div className="split-p2" style={{ width: `${percP2}%`, background: corP2 }}></div>
@@ -195,23 +215,16 @@ export const HubScreen = ({
         </div>
       </div>
 
-      {/* SELETOR DE CORES MODAL ✨ */}
       {abrindoSeletor && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border)', maxWidth: '320px', width: '100%', textAlign: 'center' }}>
             <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-h)' }}>Sua Cor de Perfil</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '24px' }}>
               {PALETA_DE_CORES.map(cor => (
-                <div 
-                  key={cor} 
-                  onClick={() => alterarCor(cor)}
-                  style={{ width: '40px', height: '40px', borderRadius: '50%', background: cor, cursor: 'pointer', border: '2px solid var(--bg)', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', margin: '0 auto' }}
-                />
+                <div key={cor} onClick={() => alterarCor(cor)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: cor, cursor: 'pointer', border: '2px solid var(--bg)', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', margin: '0 auto' }} />
               ))}
             </div>
-            <button onClick={() => setAbrindoSeletor(null)} style={{ width: '100%', padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-              Cancelar
-            </button>
+            <button onClick={() => setAbrindoSeletor(null)} style={{ width: '100%', padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancelar</button>
           </div>
         </div>
       )}
@@ -238,15 +251,51 @@ export const HubScreen = ({
         </div>
       </div>
 
-      {/* RESTANTE DO CÓDIGO DO HUB (DEPOSITAR E EXTRATO) MANTIDO IGUAL */}
+      {/* ✨ MODAL DE DEPÓSITO ATUALIZADO COM O SELETOR DE META */}
       {novoDepositoAberto && (
         <div className="simulator-box animate-fade-in" style={{ padding: '24px' }}>
           <h4 style={{ margin: '0 0 16px 0', color: 'var(--text-h)' }}>Registrar Depósito</h4>
-          <div className="simulator-row"><span>Mês/Ref.</span><input type="text" value={depMes} onChange={e => setDepMes(e.target.value)} placeholder="Ex: Março" style={{ width: '140px', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
-          <div className="simulator-row"><span>Local (Opcional)</span><input type="text" value={depLocal} onChange={e => setDepLocal(e.target.value)} placeholder="Ex: Nubank" style={{ width: '140px', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
-          <div className="simulator-row"><span>Valor {parceiro1}</span><input type="number" value={depP1} onChange={e => setDepP1(e.target.value)} placeholder="R$ 0,00" style={{ width: '140px', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
-          <div className="simulator-row"><span>Valor {parceiro2}</span><input type="number" value={depP2} onChange={e => setDepP2(e.target.value)} placeholder="R$ 0,00" style={{ width: '140px', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none' }} /></div>
-          <button className="primary" onClick={handleSalvar} style={{ width: '100%', marginTop: '16px', padding: '14px', borderRadius: '8px', border: 'none', background: corP1, color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Confirmar Depósito</button>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600 }}>Valor {parceiro1}</span>
+              <input type="number" value={depP1} onChange={e => setDepP1(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600 }}>Valor {parceiro2}</span>
+              <input type="number" value={depP2} onChange={e => setDepP2(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600 }}>Mês/Ref.</span>
+              <input type="text" value={depMes} onChange={e => setDepMes(e.target.value)} placeholder="Ex: Março" style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 600 }}>Local (Opcional)</span>
+              <input type="text" value={depLocal} onChange={e => setDepLocal(e.target.value)} placeholder="Ex: Nubank" style={{ width: '100%', background: 'var(--bg)', color: 'var(--text-h)', padding: '10px', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+
+          {/* NOVO: SELETOR DE DESTINO DO DINHEIRO */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '16px', background: 'var(--bg)', padding: '12px', borderRadius: '8px', border: '1px dashed var(--border)' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600 }}>Onde esse dinheiro vai ficar?</span>
+            <select 
+              value={depMetaDestino} 
+              onChange={e => setDepMetaDestino(e.target.value)}
+              style={{ width: '100%', padding: '10px', background: 'var(--code-bg)', color: 'var(--text-h)', border: '1px solid var(--border)', borderRadius: '6px', outline: 'none', cursor: 'pointer' }}
+            >
+              <option value="">Cofre Conjunto (Livre)</option>
+              {metas.map((m: any) => (
+                <option key={m.id} value={m.id}>Direto para: {m.titulo}</option>
+              ))}
+            </select>
+          </div>
+
+          <button className="primary" disabled={isProcessando} onClick={handleSalvar} style={{ width: '100%', padding: '14px', borderRadius: '8px', border: 'none', background: corP1, color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>
+            {isProcessando ? 'Salvando...' : 'Confirmar Depósito'}
+          </button>
         </div>
       )}
 
