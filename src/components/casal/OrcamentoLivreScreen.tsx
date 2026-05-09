@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, addDoc, collection, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { httpsCallable, getFunctions } from 'firebase/functions';
+import { doc, updateDoc, addDoc, collection, serverTimestamp, deleteDoc, query, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
+import { enviarMensagemParaGemini } from '../../services/gemini'; // ✨ NOVO IMPORT
 
 export const OrcamentoLivreScreen = ({ 
   setActiveView, casalId, saidas, limiteMensalLazer, 
@@ -47,16 +47,21 @@ export const OrcamentoLivreScreen = ({
   const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
   const diasParaRenovar = ultimoDiaMes - hoje.getDate() + 1;
 
+  // ✨ IA LIGADA PELO GEMINI.TS
   useEffect(() => {
     let isMounted = true;
     const buscarDicaRapida = async () => {
       if (!casalId) return;
       try {
-        const prompt = `Atue como um conselheiro financeiro de casais. O casal ${parceiro1} e ${parceiro2} tem um limite de lazer mensal de R$ ${limiteMensalLazer}. Já comprometeram R$ ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias. Escreva UMA dica urgente, rápida e muito interessante (máximo 2 linhas) para eles lerem agora. Seja amigável, direto ao ponto e use 1 emoji. Avalie se estão bem de saldo ou se precisam de travar os gastos.`;
-        const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
-        const funcIA = httpsCallable(funcoesNuvem, 'gerarInsightFinanceiro');
-        const resposta = await funcIA({ prompt });
-        if (isMounted && (resposta.data as any)?.insight) setDicaRapida((resposta.data as any).insight);
+        const contexto = `O casal ${parceiro1} e ${parceiro2} tem um limite de lazer mensal de R$ ${limiteMensalLazer}. Já comprometeram R$ ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias.`;
+        const pergunta = `Escreva UMA dica urgente, rápida e muito interessante (máximo 2 linhas) para eles lerem agora. Seja amigável, direto ao ponto e use 1 emoji. Avalie se estão bem de saldo ou se precisam de travar os gastos.`;
+        
+        const resposta = await enviarMensagemParaGemini(pergunta, contexto);
+        
+        if (isMounted && resposta) {
+          // Removemos aspas duplas caso a IA devolva o texto entre aspas
+          setDicaRapida(resposta.replace(/^"|"$/g, ''));
+        }
       } catch (e) {
         if (isMounted) setDicaRapida("Mantenham o foco! Conversem sobre os próximos passos para aproveitarem o mês da melhor forma. 🚀");
       } finally {
@@ -75,13 +80,12 @@ export const OrcamentoLivreScreen = ({
       const historicoStr = saidas.filter((s:any) => s.status === 'concluido').map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Nenhum passeio concluído ainda';
       const planejadosStr = saidas.filter((s:any) => s.status === 'planejado').map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Nenhum passeio planejado';
 
-      const prompt = `Atue como um conselheiro financeiro de casais moderno e empático. O casal é ${parceiro1} e ${parceiro2}. Eles possuem um orçamento de lazer mensal de R$ ${limiteMensalLazer}. Eles já gastaram ou planejaram ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias do mês. Histórico de passeios recentes: ${historicoStr}. Próximos passeios que planejaram: ${planejadosStr}.
-      Faça uma análise profunda do ritmo financeiro deles neste momento em 3 pequenos parágrafos: 1. Diagnóstico do ritmo de gastos. 2. Dica de Casal. 3. Ideia de Date econômico. Use linguagem jovem e emojis.`;
+      const contexto = `O casal é ${parceiro1} e ${parceiro2}. Possuem um orçamento de lazer mensal de R$ ${limiteMensalLazer}. Já gastaram ou planejaram R$ ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias do mês. Histórico recente: ${historicoStr}. Planejados: ${planejadosStr}.`;
+      const pergunta = `Faça uma análise profunda do ritmo financeiro deles neste momento em 3 pequenos parágrafos: 1. Diagnóstico do ritmo de gastos. 2. Dica de Casal. 3. Ideia de Date econômico. Use linguagem jovem e emojis.`;
       
-      const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
-      const funcIA = httpsCallable(funcoesNuvem, 'gerarInsightFinanceiro');
-      const resposta = await funcIA({ prompt });
-      if ((resposta.data as any)?.insight) setInsightCompletoIA((resposta.data as any).insight);
+      const resposta = await enviarMensagemParaGemini(pergunta, contexto);
+      
+      if (resposta) setInsightCompletoIA(resposta);
       else setInsightCompletoIA("Não consegui gerar a análise agora. Tente de novo em alguns minutos!");
     } catch (e) {
       setInsightCompletoIA("Puts, a ligação com o servidor falhou. Verifique a sua internet!");
@@ -91,11 +95,11 @@ export const OrcamentoLivreScreen = ({
   const gerarMensagemSobraComIA = async (valor: number, passeio: string) => {
     setMensagemIA(`Aí sim! Sobrou dinheiro do passeio! Que tal jogar essa grana extra direto na meta de vocês? 🚀`);
     try {
-      const prompt = `${parceiro1} e ${parceiro2} economizaram R$ ${valor} no passeio "${passeio}". O limite deles é R$ ${limiteMensalLazer} e ainda restam R$ ${restanteLazer} no mês, faltando ${diasParaRenovar} dias. Escreva uma frase curta (máximo 2 linhas), bem animada, comemorando essa economia e sugerindo guardar o valor.`;
-      const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
-      const funcIA = httpsCallable(funcoesNuvem, 'gerarInsightFinanceiro');
-      const resposta = await funcIA({ prompt });
-      if ((resposta.data as any)?.insight) setMensagemIA((resposta.data as any).insight);
+      const contexto = `${parceiro1} e ${parceiro2} economizaram R$ ${valor} no passeio "${passeio}". O limite deles é R$ ${limiteMensalLazer} e ainda restam R$ ${restanteLazer} no mês, faltando ${diasParaRenovar} dias.`;
+      const pergunta = `Escreva uma frase curta (máximo 2 linhas), bem animada, comemorando essa economia e sugerindo guardar o valor.`;
+      
+      const resposta = await enviarMensagemParaGemini(pergunta, contexto);
+      if (resposta) setMensagemIA(resposta.replace(/^"|"$/g, ''));
     } catch (e) {}
   };
 
@@ -137,17 +141,57 @@ export const OrcamentoLivreScreen = ({
   };
 
   const handleExcluirPlano = async (id: string) => {
-    if (!window.confirm("Deseja cancelar este planeamento?")) return;
-    try { setIsProcessando(true); await deleteDoc(doc(db, 'casais', casalId, 'saidas', id)); setSimuladorAberto(false); } 
+    if (!window.confirm("Deseja cancelar e excluir este roteiro definitivamente?")) return;
+    try { 
+      setIsProcessando(true); 
+      const saidaAlvo = saidas.find((s:any) => s.id === id);
+      
+      if (saidaAlvo && saidaAlvo.status === 'concluido') {
+        const q = query(collection(db, 'casais', casalId, 'despesas_rapidas'));
+        const querySnapshot = await getDocs(q);
+        const deletarPromises: any[] = [];
+        querySnapshot.forEach((despesaDoc) => {
+          if (despesaDoc.data().desc?.includes(saidaAlvo.titulo)) {
+            deletarPromises.push(deleteDoc(doc(db, 'casais', casalId, 'despesas_rapidas', despesaDoc.id)));
+          }
+        });
+        await Promise.all(deletarPromises);
+      }
+      
+      await deleteDoc(doc(db, 'casais', casalId, 'saidas', id)); 
+      setSimuladorAberto(false); 
+    } 
     catch (error) { console.error(error); } finally { setIsProcessando(false); }
   };
 
-  // ✨ INTELIGÊNCIA DE AUTO-PREENCHIMENTO
+  const handleReabrirPasseio = async (saida: any) => {
+    if (!window.confirm(`Deseja reabrir "${saida.titulo}" para correção? Isso removerá os lançamentos atuais do Hub.`)) return;
+
+    try {
+      setIsProcessando(true);
+      const q = query(collection(db, 'casais', casalId, 'despesas_rapidas'));
+      const querySnapshot = await getDocs(q);
+      const deletarPromises: any[] = [];
+      querySnapshot.forEach((despesaDoc) => {
+        if (despesaDoc.data().desc?.includes(saida.titulo)) {
+          deletarPromises.push(deleteDoc(doc(db, 'casais', casalId, 'despesas_rapidas', despesaDoc.id)));
+        }
+      });
+      await Promise.all(deletarPromises);
+      await updateDoc(doc(db, 'casais', casalId, 'saidas', saida.id), { status: 'planejado' });
+      abrirEdicao(saida);
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao reabrir o passeio.");
+    } finally {
+      setIsProcessando(false);
+    }
+  };
+
   const prepararConclusao = (saida: any) => {
     setModalConcluir(saida);
     setValorRealFinal(saida.estimado.toString());
 
-    // Calcula exatamente quem ia pagar o quê para pré-preencher a tela de ajuste
     let p1 = 0; let p2 = 0;
     if (saida.itens && saida.itens.length > 0) {
       saida.itens.forEach((item: any) => {
@@ -171,16 +215,14 @@ export const OrcamentoLivreScreen = ({
     setSobraDetectada(0);
   };
 
-  // ✨ PROCESSAMENTO BLINDADO E INTELIGENTE
   const processarFim = async (confirmadoIgual: boolean) => {
-    if (!modalConcluir || !casalId || isProcessando) return; // Bloqueia toque duplo imediatamente!
+    if (!modalConcluir || !casalId || isProcessando) return; 
     try {
       setIsProcessando(true);
       
       let valorGastoEfetivo = 0;
       let v1 = 0; let v2 = 0;
 
-      // Se confirmou o valor exato, lê as regras originais dos itens!
       if (confirmadoIgual) {
         valorGastoEfetivo = modalConcluir.estimado;
         if (modalConcluir.itens && modalConcluir.itens.length > 0) {
@@ -194,7 +236,6 @@ export const OrcamentoLivreScreen = ({
           v1 = valorGastoEfetivo / 2; v2 = valorGastoEfetivo / 2;
         }
       } else {
-        // Se houve ajuste manual na segunda tela
         if (quemPagouReal === 'ambos') {
           v1 = Number(valorP1Real || 0); v2 = Number(valorP2Real || 0);
           valorGastoEfetivo = v1 + v2;
@@ -207,7 +248,6 @@ export const OrcamentoLivreScreen = ({
 
       await updateDoc(doc(db, 'casais', casalId, 'saidas', modalConcluir.id), { status: 'concluido', estimado: valorGastoEfetivo });
 
-      // Lança as despesas apenas para quem realmente pagou (sem duplicar nomes no título)
       if (v1 > 0) {
         await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { 
           desc: v2 > 0 ? `${modalConcluir.titulo} (${parceiro1})` : modalConcluir.titulo, 
@@ -325,7 +365,14 @@ export const OrcamentoLivreScreen = ({
 
       {simuladorAberto && (
         <div className="animate-fade-in" style={{ background: 'var(--code-bg)', border: '2px solid var(--accent)', borderRadius: '24px', padding: '24px', marginBottom: '32px' }}>
-          <h4 style={{ margin: '0 0 20px 0', color: 'var(--accent)' }}>{idEdicao ? 'Ajustar Detalhes' : 'O que vamos aprontar?'}</h4>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h4 style={{ margin: 0, color: 'var(--accent)' }}>{idEdicao ? 'Ajustar Detalhes' : 'O que vamos aprontar?'}</h4>
+            {idEdicao && (
+              <button onClick={() => handleExcluirPlano(idEdicao)} disabled={isProcessando} style={{ background: 'none', border: 'none', color: '#ef4444', fontWeight: 'bold', cursor: 'pointer', padding: '8px' }}>
+                Excluir
+              </button>
+            )}
+          </div>
           
           <input type="text" placeholder="Nome da Saída" value={simTitulo} onChange={e => setSimTitulo(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginBottom: '16px', fontSize: '1rem' }} />
           
@@ -378,19 +425,24 @@ export const OrcamentoLivreScreen = ({
         
         {saidas.sort((a:any, b:any) => (a.status === 'concluido' ? 1 : -1)).map((saida: any) => (
           <div key={saida.id} style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: `1px solid ${saida.status === 'concluido' ? 'rgba(16, 185, 129, 0.2)' : 'var(--border)'}`, opacity: saida.status === 'concluido' ? 0.6 : 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'flex-start' }}>
               <div>
                 <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>{saida.titulo}</h4>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{saida.data} • {saida.status === 'concluido' ? '✅ Concluído' : '⏳ Planejado'}</span>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ color: 'var(--text-h)', fontWeight: 'bold', fontSize: '1.2rem' }}>{formatMoney(saida.estimado)}</div>
-                {saida.status === 'planejado' && <button onClick={() => abrirEdicao(saida)} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.8rem' }}>Editar</button>}
+                
+                {saida.status === 'planejado' ? (
+                  <button onClick={() => abrirEdicao(saida)} disabled={isProcessando} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.8rem', marginTop: '4px' }}>Editar</button>
+                ) : (
+                  <button onClick={() => handleReabrirPasseio(saida)} disabled={isProcessando} style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontWeight: 'bold', fontSize: '0.75rem', padding: '6px 10px', borderRadius: '8px', marginTop: '6px' }}>Corrigir / Reabrir</button>
+                )}
               </div>
             </div>
 
             {saida.status === 'planejado' && (
-              <button onClick={() => prepararConclusao(saida)} style={{ width: '100%', padding: '14px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid #10b981', borderRadius: '14px', fontWeight: 'bold', fontSize: '0.9rem' }}>Concluir Passeio</button>
+              <button onClick={() => prepararConclusao(saida)} disabled={isProcessando} style={{ width: '100%', padding: '14px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid #10b981', borderRadius: '14px', fontWeight: 'bold', fontSize: '0.9rem', marginTop: '8px' }}>Concluir Passeio</button>
             )}
           </div>
         ))}
