@@ -5,7 +5,7 @@ import { auth } from './services/firebase';
 
 import { Header } from './components/test/Header';
 import { Home } from './pages/Home';
-import { Login } from './pages/Login'; // Importamos a nova página
+import { Login } from './pages/Login'; 
 import { Planner } from './pages/Planner';
 import { Quiz } from './pages/Quiz';
 import { Resultados } from './pages/Resultados';
@@ -36,19 +36,23 @@ const PrivateRoute = ({ children }: { children: JSX.Element }) => {
 const AppContent = () => {
   const location = useLocation();
 
-  // Oculta o header global nas páginas de sistema (Planner e Login)
-  const ocultarHeader = location.pathname === '/planner' || location.pathname === '/login';
+  // Oculta o header global nas páginas de sistema e na raiz (que agora redireciona)
+  const ocultarHeader = location.pathname === '/planner' || location.pathname === '/login' || location.pathname === '/';
 
   return (
     <>
       {!ocultarHeader && <Header />}
       
       <Routes>
-        {/* Rotas Públicas */}
-        <Route path="/" element={<Home />} />
+        {/* ✨ A MÁGICA ACONTECE AQUI: Acessou /, vai direto pro Planner! */}
+        <Route path="/" element={<Navigate to="/planner" replace />} />
+        
+        {/* Guardamos a sua antiga Home (Landing Page) em uma rota separada */}
+        <Route path="/inicio" element={<Home />} />
+        
         <Route path="/login" element={<Login />} />
         
-        {/* Rotas do Quiz (Depende da sua regra de negócio se será público ou logado) */}
+        {/* Rotas do Quiz */}
         <Route path="/quiz" element={<Quiz />} />
         <Route path="/resultados" element={<Resultados />} />
         
