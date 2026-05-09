@@ -10,11 +10,10 @@ export const OrcamentoLivreScreen = ({
   
   const [isProcessando, setIsProcessando] = useState(false);
   
-  // ✨ Estados da IA (Dica Rápida e Análise Completa)
+  // Estados da IA
   const [mensagemIA, setMensagemIA] = useState('');
   const [dicaRapida, setDicaRapida] = useState('');
   const [carregandoDica, setCarregandoDica] = useState(true);
-  
   const [modalIAAberto, setModalIAAberto] = useState(false);
   const [insightCompletoIA, setInsightCompletoIA] = useState('');
   const [carregandoIACompleta, setCarregandoIACompleta] = useState(false);
@@ -48,82 +47,51 @@ export const OrcamentoLivreScreen = ({
   const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
   const diasParaRenovar = ultimoDiaMes - hoje.getDate() + 1;
 
-  // ==========================================
-  // ✨ IA: DICA RÁPIDA (PROATIVA) AO ABRIR O ECRÃ
-  // ==========================================
   useEffect(() => {
     let isMounted = true;
     const buscarDicaRapida = async () => {
       if (!casalId) return;
       try {
         const prompt = `Atue como um conselheiro financeiro de casais. O casal ${parceiro1} e ${parceiro2} tem um limite de lazer mensal de R$ ${limiteMensalLazer}. Já comprometeram R$ ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias. Escreva UMA dica urgente, rápida e muito interessante (máximo 2 linhas) para eles lerem agora. Seja amigável, direto ao ponto e use 1 emoji. Avalie se estão bem de saldo ou se precisam de travar os gastos.`;
-        
         const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
         const funcIA = httpsCallable(funcoesNuvem, 'gerarInsightFinanceiro');
         const resposta = await funcIA({ prompt });
-        
-        if (isMounted && (resposta.data as any)?.insight) {
-          setDicaRapida((resposta.data as any).insight);
-        }
+        if (isMounted && (resposta.data as any)?.insight) setDicaRapida((resposta.data as any).insight);
       } catch (e) {
         if (isMounted) setDicaRapida("Mantenham o foco! Conversem sobre os próximos passos para aproveitarem o mês da melhor forma. 🚀");
       } finally {
         if (isMounted) setCarregandoDica(false);
       }
     };
-    
     buscarDicaRapida();
     return () => { isMounted = false; };
   }, [casalId, parceiro1, parceiro2]); 
-  // Nota: Deixámos poucas dependências para a IA não gerar custos desnecessários a cada clique na interface.
 
-  // ==========================================
-  // IA: ANÁLISE COMPLETA (NO MODAL)
-  // ==========================================
   const gerarAnaliseCompleta = async () => {
     setModalIAAberto(true);
     setCarregandoIACompleta(true);
     setInsightCompletoIA('');
-
     try {
       const historicoStr = saidas.filter((s:any) => s.status === 'concluido').map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Nenhum passeio concluído ainda';
       const planejadosStr = saidas.filter((s:any) => s.status === 'planejado').map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Nenhum passeio planejado';
 
-      const prompt = `Atue como um conselheiro financeiro de casais moderno e empático.
-      O casal é ${parceiro1} e ${parceiro2}. Eles possuem um orçamento de lazer mensal de R$ ${limiteMensalLazer}.
-      Eles já gastaram ou planejaram ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias do mês.
-      Histórico de passeios recentes: ${historicoStr}.
-      Próximos passeios que planejaram: ${planejadosStr}.
-
-      Faça uma análise profunda do ritmo financeiro deles neste momento. Formate a resposta em 3 pequenos parágrafos:
-      1. Diagnóstico: Diga se o dinheiro vai durar até o fim do mês e elogie ou alerte sobre o ritmo de gastos.
-      2. Dica de Casal: Uma dica financeira prática e personalizada baseada no histórico deles.
-      3. Ideia de Date: Sugira um passeio económico, caseiro ou gratuito que combine com o estilo de saídas que eles já tiveram.
+      const prompt = `Atue como um conselheiro financeiro de casais moderno e empático. O casal é ${parceiro1} e ${parceiro2}. Eles possuem um orçamento de lazer mensal de R$ ${limiteMensalLazer}. Eles já gastaram ou planejaram ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias do mês. Histórico de passeios recentes: ${historicoStr}. Próximos passeios que planejaram: ${planejadosStr}.
+      Faça uma análise profunda do ritmo financeiro deles neste momento em 3 pequenos parágrafos: 1. Diagnóstico do ritmo de gastos. 2. Dica de Casal. 3. Ideia de Date econômico. Use linguagem jovem e emojis.`;
       
-      Use uma linguagem jovem, direta e coloque alguns emojis.`;
-
       const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
       const funcIA = httpsCallable(funcoesNuvem, 'gerarInsightFinanceiro');
       const resposta = await funcIA({ prompt });
-      
-      if ((resposta.data as any)?.insight) {
-        setInsightCompletoIA((resposta.data as any).insight);
-      } else {
-        setInsightCompletoIA("Não consegui gerar a análise agora. Tente de novo em alguns minutos!");
-      }
+      if ((resposta.data as any)?.insight) setInsightCompletoIA((resposta.data as any).insight);
+      else setInsightCompletoIA("Não consegui gerar a análise agora. Tente de novo em alguns minutos!");
     } catch (e) {
-      console.error(e);
       setInsightCompletoIA("Puts, a ligação com o servidor falhou. Verifique a sua internet!");
-    } finally {
-      setCarregandoIACompleta(false);
-    }
+    } finally { setCarregandoIACompleta(false); }
   };
 
   const gerarMensagemSobraComIA = async (valor: number, passeio: string) => {
     setMensagemIA(`Aí sim! Sobrou dinheiro do passeio! Que tal jogar essa grana extra direto na meta de vocês? 🚀`);
     try {
-      const prompt = `${parceiro1} e ${parceiro2} economizaram R$ ${valor} no passeio "${passeio}". O limite deles é R$ ${limiteMensalLazer} e ainda restam R$ ${restanteLazer} no mês, faltando ${diasParaRenovar} dias para virar o mês. Escreva uma frase curta (máximo 2 linhas), bem animada e personalizada, comemorando essa economia e sugerindo guardar o valor ou aproveitar de forma inteligente.`;
-      
+      const prompt = `${parceiro1} e ${parceiro2} economizaram R$ ${valor} no passeio "${passeio}". O limite deles é R$ ${limiteMensalLazer} e ainda restam R$ ${restanteLazer} no mês, faltando ${diasParaRenovar} dias. Escreva uma frase curta (máximo 2 linhas), bem animada, comemorando essa economia e sugerindo guardar o valor.`;
       const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
       const funcIA = httpsCallable(funcoesNuvem, 'gerarInsightFinanceiro');
       const resposta = await funcIA({ prompt });
@@ -131,9 +99,6 @@ export const OrcamentoLivreScreen = ({
     } catch (e) {}
   };
 
-  // ==========================================
-  // FUNÇÕES DE AÇÃO DO ORÇAMENTO
-  // ==========================================
   const handleSalvarLimite = async () => {
     if (!casalId || !novoLimiteInput) return;
     try {
@@ -145,19 +110,14 @@ export const OrcamentoLivreScreen = ({
   };
 
   const abrirNovoPlano = () => {
-    setIdEdicao(null);
-    setSimTitulo('');
-    setSimData('');
+    setIdEdicao(null); setSimTitulo(''); setSimData('');
     setSimItems([{ id: Date.now(), nome: '', valor: '', responsavel: 'ambos' }]);
     setSimuladorAberto(true);
   };
 
   const abrirEdicao = (plano: any) => {
-    setIdEdicao(plano.id);
-    setSimTitulo(plano.titulo);
-    setSimData(plano.dataRaw || ''); 
-    setSimItems(plano.itens || []);
-    setSimuladorAberto(true);
+    setIdEdicao(plano.id); setSimTitulo(plano.titulo); setSimData(plano.dataRaw || ''); 
+    setSimItems(plano.itens || []); setSimuladorAberto(true);
   };
 
   const handleSalvarPlano = async () => {
@@ -167,18 +127,10 @@ export const OrcamentoLivreScreen = ({
       const dadosPlano = {
         titulo: simTitulo,
         data: simData ? new Date(simData + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'A definir',
-        dataRaw: simData,
-        estimado: totalSimulacao,
-        status: 'planejado',
-        itens: simItems,
-        updatedAt: serverTimestamp()
+        dataRaw: simData, estimado: totalSimulacao, status: 'planejado', itens: simItems, updatedAt: serverTimestamp()
       };
-
-      if (idEdicao) {
-        await updateDoc(doc(db, 'casais', casalId, 'saidas', idEdicao), dadosPlano);
-      } else {
-        await addDoc(collection(db, 'casais', casalId, 'saidas'), { ...dadosPlano, createdAt: serverTimestamp() });
-      }
+      if (idEdicao) await updateDoc(doc(db, 'casais', casalId, 'saidas', idEdicao), dadosPlano);
+      else await addDoc(collection(db, 'casais', casalId, 'saidas'), { ...dadosPlano, createdAt: serverTimestamp() });
       setSimuladorAberto(false);
     } catch (error) { console.error(error); }
     finally { setIsProcessando(false); }
@@ -186,40 +138,87 @@ export const OrcamentoLivreScreen = ({
 
   const handleExcluirPlano = async (id: string) => {
     if (!window.confirm("Deseja cancelar este planeamento?")) return;
-    try {
-      setIsProcessando(true);
-      await deleteDoc(doc(db, 'casais', casalId, 'saidas', id));
-      setSimuladorAberto(false);
-    } catch (error) { console.error(error); }
-    finally { setIsProcessando(false); }
+    try { setIsProcessando(true); await deleteDoc(doc(db, 'casais', casalId, 'saidas', id)); setSimuladorAberto(false); } 
+    catch (error) { console.error(error); } finally { setIsProcessando(false); }
   };
 
+  // ✨ INTELIGÊNCIA DE AUTO-PREENCHIMENTO
   const prepararConclusao = (saida: any) => {
     setModalConcluir(saida);
     setValorRealFinal(saida.estimado.toString());
-    setQuemPagouReal('ambos');
+
+    // Calcula exatamente quem ia pagar o quê para pré-preencher a tela de ajuste
+    let p1 = 0; let p2 = 0;
+    if (saida.itens && saida.itens.length > 0) {
+      saida.itens.forEach((item: any) => {
+        const val = Number(item.valor || 0);
+        if (item.responsavel === 'p1') p1 += val;
+        else if (item.responsavel === 'p2') p2 += val;
+        else { p1 += val/2; p2 += val/2; }
+      });
+    } else {
+      p1 = saida.estimado / 2; p2 = saida.estimado / 2;
+    }
+
+    setValorP1Real(p1.toString());
+    setValorP2Real(p2.toString());
+
+    if (p1 > 0 && p2 === 0) setQuemPagouReal(parceiro1);
+    else if (p2 > 0 && p1 === 0) setQuemPagouReal(parceiro2);
+    else setQuemPagouReal('ambos');
+
     setPassoConclusao('pergunta');
     setSobraDetectada(0);
   };
 
+  // ✨ PROCESSAMENTO BLINDADO E INTELIGENTE
   const processarFim = async (confirmadoIgual: boolean) => {
-    if (!modalConcluir || !casalId) return;
+    if (!modalConcluir || !casalId || isProcessando) return; // Bloqueia toque duplo imediatamente!
     try {
       setIsProcessando(true);
-      let valorGastoEfetivo = confirmadoIgual ? modalConcluir.estimado : Number(valorRealFinal);
-      if (quemPagouReal === 'ambos' && !confirmadoIgual) {
-        valorGastoEfetivo = Number(valorP1Real || 0) + Number(valorP2Real || 0);
+      
+      let valorGastoEfetivo = 0;
+      let v1 = 0; let v2 = 0;
+
+      // Se confirmou o valor exato, lê as regras originais dos itens!
+      if (confirmadoIgual) {
+        valorGastoEfetivo = modalConcluir.estimado;
+        if (modalConcluir.itens && modalConcluir.itens.length > 0) {
+          modalConcluir.itens.forEach((item: any) => {
+            const val = Number(item.valor || 0);
+            if (item.responsavel === 'p1') v1 += val;
+            else if (item.responsavel === 'p2') v2 += val;
+            else { v1 += val/2; v2 += val/2; }
+          });
+        } else {
+          v1 = valorGastoEfetivo / 2; v2 = valorGastoEfetivo / 2;
+        }
+      } else {
+        // Se houve ajuste manual na segunda tela
+        if (quemPagouReal === 'ambos') {
+          v1 = Number(valorP1Real || 0); v2 = Number(valorP2Real || 0);
+          valorGastoEfetivo = v1 + v2;
+        } else if (quemPagouReal === parceiro1) {
+          valorGastoEfetivo = Number(valorRealFinal || 0); v1 = valorGastoEfetivo;
+        } else if (quemPagouReal === parceiro2) {
+          valorGastoEfetivo = Number(valorRealFinal || 0); v2 = valorGastoEfetivo;
+        }
       }
 
       await updateDoc(doc(db, 'casais', casalId, 'saidas', modalConcluir.id), { status: 'concluido', estimado: valorGastoEfetivo });
 
-      if (quemPagouReal === 'ambos') {
-        const v1 = confirmadoIgual ? (valorGastoEfetivo / 2) : Number(valorP1Real);
-        const v2 = confirmadoIgual ? (valorGastoEfetivo / 2) : Number(valorP2Real);
-        if (v1 > 0) await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { desc: `${modalConcluir.titulo} (${parceiro1})`, pagoPor: parceiro1, valor: v1, data: 'Hoje', createdAt: serverTimestamp() });
-        if (v2 > 0) await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { desc: `${modalConcluir.titulo} (${parceiro2})`, pagoPor: parceiro2, valor: v2, data: 'Hoje', createdAt: serverTimestamp() });
-      } else {
-        await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { desc: modalConcluir.titulo, pagoPor: quemPagouReal, valor: valorGastoEfetivo, data: 'Hoje', createdAt: serverTimestamp() });
+      // Lança as despesas apenas para quem realmente pagou (sem duplicar nomes no título)
+      if (v1 > 0) {
+        await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { 
+          desc: v2 > 0 ? `${modalConcluir.titulo} (${parceiro1})` : modalConcluir.titulo, 
+          pagoPor: parceiro1, valor: v1, data: 'Hoje', createdAt: serverTimestamp() 
+        });
+      }
+      if (v2 > 0) {
+        await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { 
+          desc: v1 > 0 ? `${modalConcluir.titulo} (${parceiro2})` : modalConcluir.titulo, 
+          pagoPor: parceiro2, valor: v2, data: 'Hoje', createdAt: serverTimestamp() 
+        });
       }
 
       const diferenca = modalConcluir.estimado - valorGastoEfetivo;
@@ -252,7 +251,6 @@ export const OrcamentoLivreScreen = ({
   return (
     <div className="hub-fintech-container animate-fade-in" style={{ paddingBottom: '120px' }}>
       
-      {/* 1. TEXTO DIDÁTICO E CONVERSATIVO */}
       <div style={{ marginBottom: '24px' }}>
         <button className="btn-voltar" onClick={() => setActiveView('hub')} style={{ marginBottom: '16px' }}>
           {icons.voltar} Voltar ao Hub
@@ -265,7 +263,6 @@ export const OrcamentoLivreScreen = ({
         </p>
       </div>
 
-      {/* 2. CARD DE LIMITE */}
       <div className="hub-balance-card" style={{ padding: '24px', marginBottom: '24px', position: 'relative' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
@@ -273,7 +270,7 @@ export const OrcamentoLivreScreen = ({
             {editandoLimite ? (
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                 <input type="number" value={novoLimiteInput} onChange={e => setNovoLimiteInput(e.target.value)} style={{ width: '100px', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)' }} />
-                <button onClick={handleSalvarLimite} style={{ padding: '8px 12px', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold' }}>OK</button>
+                <button onClick={handleSalvarLimite} disabled={isProcessando} style={{ padding: '8px 12px', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold' }}>OK</button>
               </div>
             ) : (
               <h2 style={{ margin: '4px 0', color: 'var(--text-h)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -294,7 +291,6 @@ export const OrcamentoLivreScreen = ({
         </div>
       </div>
 
-      {/* ✨ 3. NOVO CARTÃO DA IA PROATIVA (DICA RÁPIDA) */}
       <div style={{ background: 'linear-gradient(145deg, var(--code-bg) 0%, rgba(139, 92, 246, 0.05) 100%)', border: '1px solid rgba(139, 92, 246, 0.2)', borderRadius: '24px', padding: '24px', marginBottom: '32px', position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
           <div style={{ width: 40, height: 40, background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -320,7 +316,6 @@ export const OrcamentoLivreScreen = ({
         </button>
       </div>
 
-      {/* 4. BOTÃO ADICIONAR ROTEIRO */}
       {!simuladorAberto && (
         <button onClick={abrirNovoPlano} style={{ width: '100%', padding: '18px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', marginBottom: '32px', boxShadow: '0 6px 20px rgba(139, 92, 246, 0.3)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -328,7 +323,6 @@ export const OrcamentoLivreScreen = ({
         </button>
       )}
 
-      {/* SIMULADOR / EDITOR */}
       {simuladorAberto && (
         <div className="animate-fade-in" style={{ background: 'var(--code-bg)', border: '2px solid var(--accent)', borderRadius: '24px', padding: '24px', marginBottom: '32px' }}>
           <h4 style={{ margin: '0 0 20px 0', color: 'var(--accent)' }}>{idEdicao ? 'Ajustar Detalhes' : 'O que vamos aprontar?'}</h4>
@@ -378,7 +372,6 @@ export const OrcamentoLivreScreen = ({
         </div>
       )}
 
-      {/* LISTA DE ROTEIROS */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Próximos Momentos</h3>
         {saidas.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text)', padding: '40px', border: '1px dashed var(--border)', borderRadius: '20px' }}>Nenhum plano para este mês ainda. Que tal criar um jantar especial? ✨</p>}
@@ -397,19 +390,16 @@ export const OrcamentoLivreScreen = ({
             </div>
 
             {saida.status === 'planejado' && (
-              <button onClick={() => { setModalConcluir(saida); setPassoConclusao('pergunta'); }} style={{ width: '100%', padding: '14px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid #10b981', borderRadius: '14px', fontWeight: 'bold', fontSize: '0.9rem' }}>Concluir Passeio</button>
+              <button onClick={() => prepararConclusao(saida)} style={{ width: '100%', padding: '14px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid #10b981', borderRadius: '14px', fontWeight: 'bold', fontSize: '0.9rem' }}>Concluir Passeio</button>
             )}
           </div>
         ))}
       </div>
 
-      {/* ✨ MODAL DE ANÁLISE DETALHADA DA IA */}
       {modalIAAberto && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
           <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '32px 24px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-            
             <div style={{ width: '50px', height: '5px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px', flexShrink: 0 }}></div>
-            
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexShrink: 0 }}>
               <div style={{ width: 48, height: 48, background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
@@ -419,12 +409,11 @@ export const OrcamentoLivreScreen = ({
                 <span style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Personalizada para {parceiro1} & {parceiro2}</span>
               </div>
             </div>
-
             <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', marginBottom: '24px' }}>
               {carregandoIACompleta ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '16px' }}>
                   <div className="spinner" style={{ width: '32px', height: '32px', borderTopColor: 'var(--accent)' }}></div>
-                  <p style={{ color: 'var(--text)', fontSize: '0.9rem', textAlign: 'center' }}>Analisando os seus gastos, histórico de passeios e calculando os dias restantes...</p>
+                  <p style={{ color: 'var(--text)', fontSize: '0.9rem', textAlign: 'center' }}>Analisando os seus gastos e o histórico...</p>
                 </div>
               ) : (
                 <div style={{ color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
@@ -432,7 +421,6 @@ export const OrcamentoLivreScreen = ({
                 </div>
               )}
             </div>
-
             <button onClick={() => setModalIAAberto(false)} style={{ width: '100%', padding: '18px', borderRadius: '16px', background: 'var(--code-bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '1rem', flexShrink: 0 }}>
               Fechar Análise
             </button>
@@ -440,7 +428,6 @@ export const OrcamentoLivreScreen = ({
         </div>
       )}
 
-      {/* MODAL DE CONCLUSÃO DE PASSEIO (SOBRA) */}
       {modalConcluir && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(10px)' }}>
           <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '32px 24px 60px' }}>
@@ -452,9 +439,9 @@ export const OrcamentoLivreScreen = ({
                 <p style={{ color: 'var(--text)', marginBottom: '32px' }}>Gastaram os <strong>{formatMoney(modalConcluir.estimado)}</strong> que planearam?</p>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <button onClick={() => processarFim(true)} style={{ padding: '20px', borderRadius: '18px', background: '#10b981', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1.1rem' }}>Sim, certinho!</button>
-                  <button onClick={() => setPassoConclusao('ajuste')} style={{ padding: '20px', borderRadius: '18px', background: 'var(--code-bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '1.1rem' }}>Não, o valor mudou</button>
-                  <button onClick={fecharModal} style={{ color: 'var(--text)', background: 'none', border: 'none', marginTop: '10px' }}>Ainda não acabou</button>
+                  <button onClick={() => processarFim(true)} disabled={isProcessando} style={{ padding: '20px', borderRadius: '18px', background: '#10b981', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1.1rem' }}>Sim, certinho!</button>
+                  <button onClick={() => setPassoConclusao('ajuste')} disabled={isProcessando} style={{ padding: '20px', borderRadius: '18px', background: 'var(--code-bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '1.1rem' }}>Não, o valor mudou</button>
+                  <button onClick={fecharModal} disabled={isProcessando} style={{ color: 'var(--text)', background: 'none', border: 'none', marginTop: '10px' }}>Ainda não acabou</button>
                 </div>
               </div>
             )}
@@ -482,7 +469,7 @@ export const OrcamentoLivreScreen = ({
                   )}
 
                   <button onClick={() => processarFim(false)} disabled={isProcessando} style={{ width: '100%', padding: '20px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold' }}>Confirmar Valor</button>
-                  <button onClick={() => setPassoConclusao('pergunta')} style={{ width: '100%', background: 'none', border: 'none', color: 'var(--text)' }}>Voltar</button>
+                  <button onClick={() => setPassoConclusao('pergunta')} disabled={isProcessando} style={{ width: '100%', background: 'none', border: 'none', color: 'var(--text)' }}>Voltar</button>
                 </div>
               </div>
             )}
@@ -495,8 +482,8 @@ export const OrcamentoLivreScreen = ({
                    <p style={{ margin: 0, fontStyle: 'italic', fontSize: '0.95rem', color: 'var(--text-h)' }}>"{mensagemIA}"</p>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <button onClick={investirSobra} style={{ padding: '20px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold' }}>Investir na Meta!</button>
-                  <button onClick={fecharModal} style={{ padding: '20px', borderRadius: '18px', background: 'var(--code-bg)', border: '1px solid var(--border)', color: 'var(--text-h)' }}>Beleza, deixar no saldo livre</button>
+                  <button onClick={investirSobra} disabled={isProcessando} style={{ padding: '20px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold' }}>Investir na Meta!</button>
+                  <button onClick={fecharModal} disabled={isProcessando} style={{ padding: '20px', borderRadius: '18px', background: 'var(--code-bg)', border: '1px solid var(--border)', color: 'var(--text-h)' }}>Beleza, deixar no saldo livre</button>
                 </div>
               </div>
             )}
