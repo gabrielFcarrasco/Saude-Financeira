@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { auth, db } from '../../services/firebase';
 import { updateProfile, onAuthStateChanged, deleteUser, type User } from 'firebase/auth';
 import { addDoc, collection, serverTimestamp, getDocs, query, where, deleteDoc } from 'firebase/firestore';
-import { httpsCallable, getFunctions } from 'firebase/functions';
 
 import { importarDoNotion } from '../../utils/NotionImporter';
 import { extrairTextoBrutoDoPDF } from '../../utils/PDFExtractor';
 import { gerarBackupCompleto, restaurarBackupJSON } from '../../utils/BackupService';
+import { enviarMensagemParaGemini } from '../../services/gemini'; // ✨ NOVO IMPORT DO GEMINI
 
 interface ImportStatus {
   isOpen: boolean;
@@ -113,31 +113,42 @@ export const ConfiguracoesTab: React.FC = () => {
       if (tipo === 'Notion') {
         dadosExtraidos = await importarDoNotion(file);
       } else {
-        // Passo A: Lê o PDF localmente
-        const textoBagunçado = await extrairTextoBrutoDoPDF(file);
-        
-        // ✨ NOVO: Limpeza de texto para evitar Timeout e estourar limite da IA
-        const textoLimpo = textoBagunçado.replace(/\s+/g, ' ').trim().substring(0, 15000);
+        const textoBaguncado = await extrairTextoBrutoDoPDF(file);
+        const textoLimpo = textoBaguncado.replace(/\s+/g, ' ').trim().substring(0, 15000);
         
         clearInterval(interval);
         setImportStatus(prev => ({ ...prev, progress: 70 }));
 
-        // Passo B: Chama a Função no Firebase
-        const funcoesNuvem = getFunctions(auth.app, 'southamerica-east1');
-        const funcIA = httpsCallable(funcoesNuvem, 'extrairDadosExtratoComIA');
+        // ✨ NOVA LÓGICA DE IA COM GEMINI SDK DIRETAMENTE
+        const pergunta = `Analise o texto deste extrato bancário e encontre todas as transações financeiras. 
+        Você DEVE retornar EXATAMENTE UM ARRAY JSON VÁLIDO e nada mais. Não inclua blocos de formatação markdown (\`\`\`json) e não escreva nenhum texto antes ou depois do Array.
         
-        // Enviando o texto já limpo e reduzido
-        const resultado: any = await funcIA({ texto: textoLimpo });
+        Formato obrigatório para cada item do array:
+        [
+          {
+            "descricao": "Nome do local",
+            "valor": 150.50, // número sempre positivo, independente de ser entrada ou saída
+            "data": "2026-05-15", // formato YYYY-MM-DD
+            "tipo": "despesa" // ou "receita"
+          }
+        ]`;
 
-        if (resultado.data.status === 'success') {
-          dadosExtraidos = resultado.data.data.map((item: any) => ({
+        const respostaBruta = await enviarMensagemParaGemini(pergunta, `Texto do extrato: ${textoLimpo}`);
+
+        try {
+          // Limpa possíveis bloqueios markdown que a IA possa tentar colocar
+          const jsonLimpo = respostaBruta.replace(/```json/gi, '').replace(/```/g, '').trim();
+          const transacoes = JSON.parse(jsonLimpo);
+
+          dadosExtraidos = transacoes.map((item: any) => ({
             ...item,
             categoria: item.tipo === 'receita' ? 'Renda Extra' : 'Importado IA',
-            conta: `Itaú IA (PDF)`,
+            conta: `Extrato (IA)`,
             status: 'pago'
           }));
-        } else {
-          throw new Error("A IA não conseguiu ler o arquivo.");
+        } catch (err) {
+          console.error("Erro no Parse do JSON:", err, "Resposta da IA:", respostaBruta);
+          throw new Error("A IA leu o arquivo, mas não conseguiu formatar os dados. Tente novamente.");
         }
       }
 
@@ -154,7 +165,7 @@ export const ConfiguracoesTab: React.FC = () => {
     } catch (error: any) {
       clearInterval(interval);
       console.error(error);
-      const msgErro = error.message.includes("unauthenticated") ? "Você precisa estar logado." : "Não conseguimos analisar este PDF. Verifique se ele não está com senha ou se é um extrato válido.";
+      const msgErro = error.message.includes("unauthenticated") ? "Você precisa estar logado." : "Não conseguimos analisar este arquivo. " + (error.message || "");
       setImportStatus(prev => ({ ...prev, step: 'error', errorMessage: msgErro }));
     }
   };
@@ -256,7 +267,7 @@ export const ConfiguracoesTab: React.FC = () => {
 
   const ToggleSwitch = ({ checked, onChange }: { checked: boolean, onChange: () => void }) => (
     <div onClick={onChange} style={{ width: '44px', height: '24px', borderRadius: '12px', cursor: 'pointer', background: checked ? 'var(--accent)' : 'var(--code-bg)', border: checked ? 'none' : '1px solid var(--border)', position: 'relative', transition: '0.3s ease', flexShrink: 0 }}>
-      <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: checked ? '23px' : '3px', transition: 'all 0.3s ease' }} />
+      <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'white', position: 'absolute', top: '2px', left: checked ? '22px' : '2px', transition: 'all 0.3s ease' }} />
     </div>
   );
 
@@ -274,7 +285,7 @@ export const ConfiguracoesTab: React.FC = () => {
                   <div style={{ color: 'var(--accent)', marginBottom: '24px', display: 'flex', justifyContent: 'center' }}>
                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 2s linear infinite' }}><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
                   </div>
-                  <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem' }}>{importStatus.sourceName === 'Reset' ? 'Apagando Banco...' : importStatus.step === 'reading' ? `Analisando...` : 'Gravando...'}</h2>
+                  <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', color: 'var(--text-h)' }}>{importStatus.sourceName === 'Reset' ? 'Apagando Banco...' : importStatus.step === 'reading' ? `Analisando...` : 'Gravando...'}</h2>
                   <div style={{ width: '100%', height: '10px', background: 'var(--code-bg)', borderRadius: '5px', overflow: 'hidden', border: '1px solid var(--border)', marginTop: '32px' }}>
                     <div style={{ height: '100%', background: importStatus.sourceName === 'Reset' ? '#ef4444' : 'var(--accent)', width: `${importStatus.progress}%`, transition: 'width 0.3s ease-out' }} />
                   </div>
@@ -287,23 +298,25 @@ export const ConfiguracoesTab: React.FC = () => {
                   <div style={{ color: '#10b981', marginBottom: '24px', display: 'flex', justifyContent: 'center' }}>
                     <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                   </div>
-                  <h2 style={{ margin: '0 0 16px 0', fontSize: '1.5rem' }}>Extrato Pronto!</h2>
+                  <h2 style={{ margin: '0 0 16px 0', fontSize: '1.5rem', color: 'var(--text-h)' }}>Extrato Pronto!</h2>
                   <p style={{ color: 'var(--text)', fontSize: '1rem', marginBottom: '32px', lineHeight: '1.5' }}>
                     Encontramos <strong style={{ color: 'var(--text-h)', fontSize: '1.3rem' }}>{importStatus.items.length}</strong> transações válidas. Deseja importar?
                   </p>
                   <div style={{ display: 'flex', gap: '16px' }}>
-                    <button onClick={fecharModal} style={{ flex: 1, padding: '14px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancelar</button>
-                    <button onClick={confirmarSalvamento} style={{ flex: 1, padding: '14px', background: '#10b981', border: 'none', color: '#fff', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Sim, Importar</button>
+                    <button onClick={fecharModal} style={{ flex: 1, padding: '14px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>Cancelar</button>
+                    <button onClick={confirmarSalvamento} style={{ flex: 1, padding: '14px', background: '#10b981', border: 'none', color: '#fff', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>Sim, Importar</button>
                   </div>
                 </>
               )}
 
               {importStatus.step === 'success' && (
                 <>
-                  <div style={{ fontSize: '56px', marginBottom: '24px' }}>🎉</div>
-                  <h2 style={{ margin: '0 0 12px 0', fontSize: '1.5rem' }}>Tudo Certo!</h2>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px', color: '#10b981' }}>
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                  </div>
+                  <h2 style={{ margin: '0 0 12px 0', fontSize: '1.5rem', color: 'var(--text-h)' }}>Tudo Certo!</h2>
                   <p style={{ color: 'var(--text)', fontSize: '1rem', marginBottom: '32px' }}>Ação concluída com sucesso.</p>
-                  <button onClick={fecharModal} className="primary" style={{ width: '100%', padding: '14px', borderRadius: '8px', fontWeight: 'bold' }}>Concluir</button>
+                  <button onClick={fecharModal} style={{ width: '100%', padding: '16px', borderRadius: '12px', background: 'var(--accent)', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Concluir</button>
                 </>
               )}
 
@@ -311,7 +324,7 @@ export const ConfiguracoesTab: React.FC = () => {
                 <>
                   <h2 style={{ margin: '0 0 12px 0', fontSize: '1.5rem', color: importStatus.sourceName === 'Reset' ? '#10b981' : '#ef4444' }}>{importStatus.sourceName === 'Reset' ? 'Histórico Limpo!' : 'Ops!'}</h2>
                   <p style={{ color: 'var(--text)', fontSize: '1rem', marginBottom: '32px' }}>{importStatus.errorMessage}</p>
-                  <button onClick={fecharModal} style={{ width: '100%', padding: '14px', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-h)', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>OK, Voltar</button>
+                  <button onClick={fecharModal} style={{ width: '100%', padding: '16px', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-h)', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>OK, Voltar</button>
                 </>
               )}
             </>
@@ -327,8 +340,8 @@ export const ConfiguracoesTab: React.FC = () => {
                   <h2 style={{ color: 'var(--text-h)', margin: '0 0 16px 0', fontSize: '1.5rem' }}>Você tem certeza?</h2>
                   <p style={{ color: 'var(--text)', marginBottom: '32px', lineHeight: '1.5' }}>Esta ação é irreversível. O seu acesso será revogado imediatamente.</p>
                   <div style={{ display: 'flex', gap: '16px' }}>
-                    <button style={{ flex: 1, padding: '14px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }} onClick={fecharModal}>Cancelar</button>
-                    <button style={{ flex: 1, padding: '14px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setDeleteStep(2)}>Prosseguir</button>
+                    <button style={{ flex: 1, padding: '14px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }} onClick={fecharModal}>Cancelar</button>
+                    <button style={{ flex: 1, padding: '14px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setDeleteStep(2)}>Prosseguir</button>
                   </div>
                 </>
               )}
@@ -337,12 +350,12 @@ export const ConfiguracoesTab: React.FC = () => {
                 <>
                   <h2 style={{ color: 'var(--text-h)', margin: '0 0 16px 0', fontSize: '1.5rem' }}>Salvar seus Dados</h2>
                   <p style={{ color: 'var(--text)', marginBottom: '32px', lineHeight: '1.5' }}>Baixe um backup completo da sua vida financeira. É obrigatório.</p>
-                  <button style={{ width: '100%', padding: '16px', background: backupRealizado ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg)', color: backupRealizado ? '#10b981' : 'var(--text-h)', border: `1px solid ${backupRealizado ? '#10b981' : 'var(--border)'}`, borderRadius: '8px', cursor: 'pointer', marginBottom: '32px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={async () => { await gerarBackupCompleto(currentUser!.uid); setBackupRealizado(true); }}>
+                  <button style={{ width: '100%', padding: '16px', background: backupRealizado ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg)', color: backupRealizado ? '#10b981' : 'var(--text-h)', border: `1px solid ${backupRealizado ? '#10b981' : 'var(--border)'}`, borderRadius: '12px', cursor: 'pointer', marginBottom: '32px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={async () => { await gerarBackupCompleto(currentUser!.uid); setBackupRealizado(true); }}>
                     {backupRealizado ? '✓ Backup Concluído' : '⬇ Baixar Backup'}
                   </button>
                   <div style={{ display: 'flex', gap: '16px' }}>
-                    <button style={{ flex: 1, padding: '14px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }} onClick={fecharModal}>Cancelar</button>
-                    <button style={{ flex: 1, padding: '14px', background: backupRealizado ? '#ef4444' : 'var(--bg)', color: backupRealizado ? 'white' : 'var(--text)', border: 'none', borderRadius: '8px', cursor: backupRealizado ? 'pointer' : 'not-allowed', fontWeight: 'bold', opacity: backupRealizado ? 1 : 0.5 }} onClick={() => backupRealizado && setDeleteStep(3)}>Avançar</button>
+                    <button style={{ flex: 1, padding: '14px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }} onClick={fecharModal}>Cancelar</button>
+                    <button style={{ flex: 1, padding: '14px', background: backupRealizado ? '#ef4444' : 'var(--bg)', color: backupRealizado ? 'white' : 'var(--text)', border: 'none', borderRadius: '12px', cursor: backupRealizado ? 'pointer' : 'not-allowed', fontWeight: 'bold', opacity: backupRealizado ? 1 : 0.5 }} onClick={() => backupRealizado && setDeleteStep(3)}>Avançar</button>
                   </div>
                 </>
               )}
@@ -351,10 +364,10 @@ export const ConfiguracoesTab: React.FC = () => {
                 <>
                   <h2 style={{ color: '#ef4444', margin: '0 0 16px 0', fontSize: '1.5rem' }}>Último Passo</h2>
                   <p style={{ color: 'var(--text)', marginBottom: '24px', lineHeight: '1.5' }}>Digite <strong>EXCLUIR</strong> para deletar a conta permanentemente.</p>
-                  <input type="text" placeholder="EXCLUIR" value={textoConfirmacao} onChange={e => setTextoConfirmacao(e.target.value)} style={{ width: '100%', padding: '16px', marginBottom: '32px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', borderRadius: '8px', textAlign: 'center', fontWeight: 'bold', letterSpacing: '2px', boxSizing: 'border-box' }} />
+                  <input type="text" placeholder="EXCLUIR" value={textoConfirmacao} onChange={e => setTextoConfirmacao(e.target.value)} style={{ width: '100%', padding: '16px', marginBottom: '32px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', borderRadius: '12px', textAlign: 'center', fontWeight: 'bold', letterSpacing: '2px', boxSizing: 'border-box' }} />
                   <div style={{ display: 'flex', gap: '16px' }}>
-                    <button style={{ flex: 1, padding: '14px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }} onClick={fecharModal}>Cancelar</button>
-                    <button style={{ flex: 1, padding: '14px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }} onClick={handleExcluirContaDefinitivamente}>ADEUS</button>
+                    <button style={{ flex: 1, padding: '14px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }} onClick={fecharModal}>Cancelar</button>
+                    <button style={{ flex: 1, padding: '14px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }} onClick={handleExcluirContaDefinitivamente}>ADEUS</button>
                   </div>
                 </>
               )}
@@ -366,110 +379,127 @@ export const ConfiguracoesTab: React.FC = () => {
     );
   }
 
+  // ✨ UI QUE ESTAVA FALTANDO NO CÓDIGO CORTADO
   return (
     <div className="animate-fade-in" style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px', padding: '0 10px 60px 10px' }}>
       
-      <div className="page-header" style={{ marginBottom: '20px', padding: '0 10px' }}>
-        <h1 style={{ fontSize: '1.8rem', margin: '0 0 8px 0' }}>Configurações</h1>
-        <p style={{ color: 'var(--text)', margin: 0, fontSize: '1rem', lineHeight: '1.4' }}>Personalize sua experiência e gerencie seus dados.</p>
+      <div style={{ marginBottom: '24px' }}>
+        <h2 style={{ color: 'var(--text-h)', margin: '0 0 8px 0' }}>Configurações</h2>
+        <p style={{ color: 'var(--text)', fontSize: '0.95rem', margin: 0 }}>Gerencie seu perfil, preferências e dados do sistema.</p>
       </div>
 
-      <div className="card" style={{ padding: '24px' }}>
-        <h3 style={{ marginTop: 0, marginBottom: '24px', fontSize: '1.1rem', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>Identidade</h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '20px', marginBottom: '32px' }}>
-          <div style={{ position: 'relative', cursor: 'pointer', width: '80px', height: '80px', flexShrink: 0 }} onClick={() => fileInputRef.current?.click()}>
-            <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleTrocarFoto} />
-            {fotoDisplay ? (
-              <img src={fotoDisplay} alt="Perfil" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }} referrerPolicy="no-referrer" />
-            ) : (
-              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'var(--accent)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 'bold' }}>{inicial}</div>
-            )}
-            {!isUploadingImg && (
-              <div style={{ position: 'absolute', bottom: '-4px', right: '-4px', background: 'var(--accent)', color: 'white', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--bg)' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              </div>
-            )}
-            {isUploadingImg && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', borderRadius: '50%' }}><div className="spinner" style={{ width: '20px', height: '20px', margin: 0 }}></div></div>}
+      <div className="card" style={{ padding: '24px', borderRadius: '24px' }}>
+        <h3 style={{ margin: '0 0 20px 0', color: 'var(--text-h)', fontSize: '1.1rem' }}>Seu Perfil</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'var(--accent)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold', overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+            {fotoDisplay ? <img src={fotoDisplay} alt="Perfil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : inicial}
+            <label style={{ position: 'absolute', bottom: 0, width: '100%', background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '0.6rem', textAlign: 'center', padding: '4px 0', cursor: 'pointer' }}>
+              {isUploadingImg ? '...' : 'Mudar'}
+              <input type="file" hidden accept="image/*" onChange={handleTrocarFoto} ref={fileInputRef} disabled={isUploadingImg} />
+            </label>
           </div>
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <p style={{ margin: 0, fontWeight: 700, color: 'var(--text-h)', fontSize: '1.2rem' }}>{currentUser?.displayName || 'Usuário'}</p>
-            <p style={{ margin: '4px 0 0 0', color: 'var(--text)', fontSize: '0.85rem', wordBreak: 'break-all' }}>{currentUser?.email}</p>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', display: 'block', marginBottom: '6px' }}>NOME DE EXIBIÇÃO</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input type="text" value={nome} onChange={e => setNome(e.target.value)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', fontSize: '1rem' }} />
+              <button onClick={handleSalvarPerfil} disabled={isSaving} style={{ padding: '0 24px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>{isSaving ? '...' : 'Salvar'}</button>
+            </div>
           </div>
         </div>
-        <form onSubmit={handleSalvarPerfil} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ width: '100%' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text)', fontSize: '0.9rem', fontWeight: 600 }}>Nome de Exibição</label>
-            <input type="text" value={nome} onChange={e => setNome(e.target.value)} required style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', boxSizing: 'border-box' }} />
-          </div>
-          <button type="submit" className="primary" disabled={isSaving} style={{ width: '100%', padding: '14px', borderRadius: '8px', fontWeight: 600 }}>{isSaving ? 'A guardar...' : 'Atualizar Nome'}</button>
-        </form>
       </div>
 
-      <div className="form-grid-2">
-        <div className="card" style={{ padding: '24px' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-            Sistema
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {[ { label: 'Modo Escuro', state: darkMode, setState: setDarkMode }, { label: 'Análise por e-mail', state: notificacoesAtivas, setState: setNotificacoesAtivas }, { label: 'Alertas de Contas', state: lembreteVencimento, setState: setLembreteVencimento } ].map((item, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--social-bg)', borderRadius: '10px' }}>
-                <span style={{ fontSize: '0.9rem', color: 'var(--text-h)' }}>{item.label}</span>
-                <ToggleSwitch checked={item.state} onChange={() => item.setState(!item.state)} />
-              </div>
-            ))}
+      <div className="card" style={{ padding: '24px', borderRadius: '24px' }}>
+        <h3 style={{ margin: '0 0 20px 0', color: 'var(--text-h)', fontSize: '1.1rem' }}>Preferências</h3>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
+          <div>
+            <div style={{ fontWeight: 'bold', color: 'var(--text-h)', marginBottom: '2px' }}>Modo Escuro</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Aparência do aplicativo</div>
           </div>
+          <ToggleSwitch checked={darkMode} onChange={() => setDarkMode(!darkMode)} />
         </div>
-        <div className="card" style={{ padding: '24px' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-            Regional
-          </h3>
-          <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text)' }}>Moeda Principal</label>
-          <select value={moedaPadrao} onChange={e => setMoedaPadrao(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
-            <option value="BRL">Real (R$)</option>
-            <option value="USD">Dólar ($)</option>
-            <option value="EUR">Euro (€)</option>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
+          <div>
+            <div style={{ fontWeight: 'bold', color: 'var(--text-h)', marginBottom: '2px' }}>Notificações</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Avisos e resumos</div>
+          </div>
+          <ToggleSwitch checked={notificacoesAtivas} onChange={() => setNotificacoesAtivas(!notificacoesAtivas)} />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0' }}>
+          <div>
+            <div style={{ fontWeight: 'bold', color: 'var(--text-h)', marginBottom: '2px' }}>Moeda Padrão</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Símbolo nos valores</div>
+          </div>
+          <select value={moedaPadrao} onChange={e => setMoedaPadrao(e.target.value)} style={{ padding: '10px 16px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', fontWeight: 'bold', outline: 'none' }}>
+            <option value="BRL">R$ (Real)</option>
+            <option value="USD">$ (Dólar)</option>
+            <option value="EUR">€ (Euro)</option>
           </select>
         </div>
       </div>
 
-      <div className="card" style={{ padding: '24px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Dados</h3>
-          <button style={{ background: '#10b981', border: 'none', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>Exportar CSV</button>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ border: '1px dashed var(--border)', borderRadius: '12px', padding: '20px', textAlign: 'center', background: 'var(--social-bg)' }}>
-            <strong style={{ display: 'block', fontSize: '0.95rem', marginBottom: '4px' }}>Notion (CSV/ZIP)</strong>
-            <label htmlFor="notion-upload" className="primary" style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-block' }}>Upload ZIP (Notion)</label>
-            <input type="file" accept=".zip" style={{ display: 'none' }} id="notion-upload" onChange={handleUploadNotion} />
-          </div>
-          <div style={{ border: '1px dashed var(--border)', borderRadius: '12px', padding: '20px', textAlign: 'center', background: 'var(--social-bg)' }}>
-            <strong style={{ display: 'block', fontSize: '0.95rem', marginBottom: '4px' }}>Banco (PDF)</strong>
-            <label htmlFor="pdf-upload" style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-block', background: '#10b981', color: 'white' }}>Analisar PDF</label>
-            <input type="file" accept=".pdf" style={{ display: 'none' }} id="pdf-upload" onChange={handleUploadPDF} />
-          </div>
+      <div className="card" style={{ padding: '24px', borderRadius: '24px' }}>
+        <h3 style={{ margin: '0 0 20px 0', color: 'var(--text-h)', fontSize: '1.1rem' }}>Dados e Integrações</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '16px', cursor: 'pointer' }}>
+            <div>
+              <div style={{ fontWeight: 'bold', color: 'var(--text-h)', marginBottom: '4px' }}>Importar de PDF (IA)</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Extratos bancários Itaú, Nubank, etc.</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.9rem' }}>
+              Upload <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            </div>
+            <input type="file" hidden accept=".pdf" onChange={handleUploadPDF} />
+          </label>
+
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '16px', cursor: 'pointer' }}>
+            <div>
+              <div style={{ fontWeight: 'bold', color: 'var(--text-h)', marginBottom: '4px' }}>Importar do Notion</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Arquivo .csv do banco de dados antigo</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.9rem' }}>
+              Upload <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            </div>
+            <input type="file" hidden accept=".csv" onChange={handleUploadNotion} />
+          </label>
+
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '16px', cursor: 'pointer' }}>
+            <div>
+              <div style={{ fontWeight: 'bold', color: 'var(--text-h)', marginBottom: '4px' }}>Restaurar Backup</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Carregar arquivo .json do GC Planner</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.9rem' }}>
+              Upload <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            </div>
+            <input type="file" hidden accept=".json" onChange={handleRestaurarBackup} />
+          </label>
+
+          <button onClick={() => { gerarBackupCompleto(currentUser!.uid); alert('A preparar o seu arquivo... o download vai iniciar em breve.'); }} style={{ textAlign: 'left', padding: '18px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 'bold', color: 'var(--text-h)', marginBottom: '4px' }}>Baixar Backup</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Salvar todos os seus dados com segurança</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontWeight: 'bold', fontSize: '0.9rem' }}>
+              Baixar <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            </div>
+          </button>
+
         </div>
       </div>
 
-      <div className="card" style={{ padding: '24px', border: '1px solid rgba(239, 68, 68, 0.2)', background: 'rgba(239, 68, 68, 0.02)' }}>
-        <h3 style={{ marginTop: 0, marginBottom: '12px', color: '#ef4444', fontSize: '1rem' }}>Zona Crítica</h3>
-        <p style={{ color: 'var(--text)', fontSize: '0.85rem', marginBottom: '20px', lineHeight: '1.5' }}>Ações permanentes. Uma vez executadas, os seus dados não podem ser recuperados.</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
-          <button onClick={handleResetarHistorico} style={{ width: '100%', padding: '14px', borderRadius: '8px', background: 'transparent', color: '#ef4444', border: '1px solid #ef4444', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
-            Resetar Histórico (Testes)
+      <div className="card" style={{ padding: '24px', borderRadius: '24px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+        <h3 style={{ margin: '0 0 16px 0', color: '#ef4444', fontSize: '1.1rem' }}>Zona de Perigo</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <button onClick={handleResetarHistorico} style={{ padding: '18px', background: 'transparent', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '16px', cursor: 'pointer', fontWeight: 'bold', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            Limpar Todo o Histórico
           </button>
-
-          <div style={{ border: '1px dashed var(--border)', borderRadius: '12px', padding: '20px', textAlign: 'center', background: 'var(--social-bg)' }}>
-            <strong style={{ display: 'block', fontSize: '0.95rem', marginBottom: '4px' }}>Restaurar Backup (.json)</strong>
-            <label htmlFor="backup-upload" className="primary" style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-block' }}>Carregar Backup</label>
-            <input type="file" accept=".json" style={{ display: 'none' }} id="backup-upload" onChange={handleRestaurarBackup} />
-          </div>
-
-          <button onClick={() => setDeleteStep(1)} style={{ width: '100%', padding: '14px', borderRadius: '8px', background: '#ef4444', color: 'white', border: 'none', fontWeight: 600, cursor: 'pointer' }}>
-            Excluir Conta
+          <button onClick={() => setDeleteStep(1)} style={{ padding: '18px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '16px', cursor: 'pointer', fontWeight: 'bold', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px' }}>
+             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            Excluir Conta Definitivamente
           </button>
         </div>
       </div>
