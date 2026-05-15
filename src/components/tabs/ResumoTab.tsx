@@ -22,20 +22,39 @@ export const ResumoTab: React.FC<ResumoTabProps> = ({ transacoes, dividas, metas
   const saudacao = horaAtual >= 5 && horaAtual < 12 ? 'Bom dia' : horaAtual >= 12 && horaAtual < 18 ? 'Boa tarde' : 'Boa noite';
 
   // ==========================================
-  // 1. FILTRO DE MÊS ATUAL (Apenas este mês e ano)
+  // 1. FILTRO DE MÊS ATUAL (Com Lógica de Vale/Adiantamento)
   // ==========================================
   const transacoesMesAtual = useMemo(() => {
     const hoje = new Date();
-    const mes = hoje.getMonth();
-    const ano = hoje.getFullYear();
+    const mesAtual = hoje.getMonth();
+    const anoAtual = hoje.getFullYear();
+
     return transacoes.filter(t => {
-      const dataT = new Date(t.data);
-      return dataT.getMonth() === mes && dataT.getFullYear() === ano;
+      // Correção de Fuso Horário: Garante que "2024-05-20" não vire dia 19 por causa do fuso GMT-3
+      const dataStr = t.data.includes('T') ? t.data : `${t.data}T12:00:00`;
+      const dataT = new Date(dataStr);
+      
+      let mesT = dataT.getMonth();
+      let anoT = dataT.getFullYear();
+
+      // LÓGICA DO VALE: Se for um Vale/Adiantamento recebido do dia 15 em diante, conta para o MÊS SEGUINTE.
+      const termoBusca = `${t.descricao || ''} ${t.categoria || ''}`.toLowerCase();
+      const ehVale = termoBusca.includes('vale') || termoBusca.includes('adiantamento');
+
+      if (ehVale && dataT.getDate() >= 15) {
+        mesT += 1; // Empurra para o mês que vem
+        if (mesT > 11) { // Se for Dezembro (11), vira Janeiro (0) do ano que vem
+          mesT = 0;
+          anoT += 1;
+        }
+      }
+
+      return mesT === mesAtual && anoT === anoAtual;
     });
   }, [transacoes]);
 
   // ==========================================
-  // 2. MATEMÁTICA FINANCEIRA BLINDADA (Math.abs resolve o bug do --)
+  // 2. MATEMÁTICA FINANCEIRA BLINDADA
   // ==========================================
   const totalReceitas = transacoesMesAtual
     .filter(t => t.tipo === 'receita')
@@ -63,7 +82,7 @@ export const ResumoTab: React.FC<ResumoTabProps> = ({ transacoes, dividas, metas
   const temInvestimento = transacoes.some(t => t.categoria === 'Investimentos');
 
   // ==========================================
-  // 🏆 SISTEMA DE CONQUISTAS COMPLETO (Sua versão original restaurada)
+  // 🏆 SISTEMA DE CONQUISTAS COMPLETO
   // ==========================================
   const conquistasDinamicas = [
     { 
@@ -179,7 +198,7 @@ export const ResumoTab: React.FC<ResumoTabProps> = ({ transacoes, dividas, metas
   ];
 
   // ==========================================
-  // VIEW: TELA CHEIA DE CONQUISTAS (Solicitado)
+  // VIEW: TELA CHEIA DE CONQUISTAS 
   // ==========================================
   if (verTodasConquistas) {
     return (
@@ -306,7 +325,7 @@ export const ResumoTab: React.FC<ResumoTabProps> = ({ transacoes, dividas, metas
         </div>
       </div>
 
-      {/* MODAL DE DETALHES DA CONQUISTA (Mantido Original) */}
+      {/* MODAL DE DETALHES DA CONQUISTA */}
       {conquistaSelecionada && (
         <div className="modal-overlay" onClick={() => setConquistaSelecionada(null)} style={{ zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px', textAlign: 'center', padding: '32px', borderRadius: '24px' }}>
@@ -324,7 +343,12 @@ export const ResumoTab: React.FC<ResumoTabProps> = ({ transacoes, dividas, metas
                 {conquistaSelecionada.unlocked ? conquistaSelecionada.mensagemParabens : conquistaSelecionada.comoDesbloquear}
               </p>
             </div>
-            <button className="primary" onClick={() => setConquistaSelecionada(null)} style={{ width: '100%', marginTop: '24px', padding: '12px', borderRadius: '12px' }}>Fechar</button>
+            <button 
+              onClick={() => setConquistaSelecionada(null)}
+              style={{ width: '100%', padding: '14px', marginTop: '24px', borderRadius: '12px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              Fechar
+            </button>
           </div>
         </div>
       )}
