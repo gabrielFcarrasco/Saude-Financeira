@@ -38,22 +38,46 @@ export const OrcamentoLivreScreen = ({
   const [valorP2Real, setValorP2Real] = useState('');
   const [sobraDetectada, setSobraDetectada] = useState(0);
 
-  const gastoEPlanejado = saidas.reduce((acc: number, curr: any) => acc + Number(curr.estimado || 0), 0);
-  const restanteLazer = limiteMensalLazer - gastoEPlanejado;
-  const porcentagemUso = Math.min((gastoEPlanejado / limiteMensalLazer) * 100, 100);
-  const totalSimulacao = simItems.reduce((acc: number, curr: any) => acc + Number(curr.valor || 0), 0);
-
+  // ✨ FILTRO INTELIGENTE DE MÊS ATUAL VS HISTÓRICO
   const hoje = new Date();
-  const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+  const mesAtualNum = hoje.getMonth();
+  const anoAtualNum = hoje.getFullYear();
+  const ultimoDiaMes = new Date(anoAtualNum, mesAtualNum + 1, 0).getDate();
   const diasParaRenovar = ultimoDiaMes - hoje.getDate() + 1;
 
-  // ✨ IA LIGADA SEM EMOJIS
+  const saidasMesAtual: any[] = [];
+  const saidasHistorico: any[] = [];
+
+  saidas.forEach((saida: any) => {
+    let isMesAtual = true;
+    if (saida.dataRaw) {
+      const [anoStr, mesStr] = saida.dataRaw.split('-');
+      if (parseInt(anoStr) !== anoAtualNum || parseInt(mesStr) - 1 !== mesAtualNum) {
+        isMesAtual = false;
+      }
+    }
+    // Se não tiver data salva, assume mês atual para não sumir do mapa
+    if (isMesAtual) {
+      saidasMesAtual.push(saida);
+    } else {
+      saidasHistorico.push(saida);
+    }
+  });
+
+  // ✨ CÁLCULO BASEADO APENAS NO MÊS ATUAL
+  const gastoEPlanejado = saidasMesAtual.reduce((acc: number, curr: any) => acc + Number(curr.estimado || 0), 0);
+  const restanteLazer = limiteMensalLazer - gastoEPlanejado;
+  const porcentagemUso = Math.min((gastoEPlanejado / limiteMensalLazer) * 100, 100);
+  
+  const totalSimulacao = simItems.reduce((acc: number, curr: any) => acc + Number(curr.valor || 0), 0);
+
+  // IA LIGADA SEM EMOJIS (Usando apenas mês atual para saldo e histórico geral para análise)
   useEffect(() => {
     let isMounted = true;
     const buscarDicaRapida = async () => {
       if (!casalId) return;
       try {
-        const contexto = `O casal ${parceiro1} e ${parceiro2} tem um limite de lazer mensal de R$ ${limiteMensalLazer}. Já comprometeram R$ ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias.`;
+        const contexto = `O casal ${parceiro1} e ${parceiro2} tem um limite de lazer mensal de R$ ${limiteMensalLazer}. Neste mês, já comprometeram R$ ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias.`;
         const pergunta = `Escreva UMA dica urgente, rápida e muito interessante (máximo 2 linhas) para eles lerem agora. Seja amigável e direto ao ponto. IMPORTANTE: NÃO use nenhum emoji na sua resposta. Avalie se estão bem de saldo ou se precisam de travar os gastos.`;
         
         const resposta = await enviarMensagemParaGemini(pergunta, contexto);
@@ -69,18 +93,18 @@ export const OrcamentoLivreScreen = ({
     };
     buscarDicaRapida();
     return () => { isMounted = false; };
-  }, [casalId, parceiro1, parceiro2]); 
+  }, [casalId, parceiro1, parceiro2, gastoEPlanejado, limiteMensalLazer, restanteLazer, diasParaRenovar]); 
 
   const gerarAnaliseCompleta = async () => {
     setModalIAAberto(true);
     setCarregandoIACompleta(true);
     setInsightCompletoIA('');
     try {
-      const historicoStr = saidas.filter((s:any) => s.status === 'concluido').map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Nenhum passeio concluído ainda';
-      const planejadosStr = saidas.filter((s:any) => s.status === 'planejado').map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Nenhum passeio planejado';
+      const históricoPassadoStr = saidasHistorico.map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Sem histórico anterior';
+      const mesAtualStr = saidasMesAtual.map((s:any) => `${s.titulo} (${s.status} - R$ ${s.estimado})`).join(', ') || 'Nenhum passeio planejado este mês';
 
-      const contexto = `O casal é ${parceiro1} e ${parceiro2}. Possuem um orçamento de lazer mensal de R$ ${limiteMensalLazer}. Já gastaram ou planejaram R$ ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias do mês. Histórico recente: ${historicoStr}. Planejados: ${planejadosStr}.`;
-      const pergunta = `Faça uma análise profunda do ritmo financeiro deles neste momento em 3 pequenos parágrafos: 1. Diagnóstico do ritmo de gastos. 2. Dica de Casal. 3. Ideia de Date econômico. Use linguagem jovem e direta. IMPORTANTE: NÃO use nenhum emoji na sua resposta.`;
+      const contexto = `Casal: ${parceiro1} e ${parceiro2}. Limite mensal: R$ ${limiteMensalLazer}. Gastos deste mês: R$ ${gastoEPlanejado}. Saldo restante: R$ ${restanteLazer} para ${diasParaRenovar} dias. Histórico de meses anteriores: ${históricoPassadoStr}. Passeios do mês atual: ${mesAtualStr}.`;
+      const pergunta = `Faça uma análise profunda do ritmo financeiro deles neste momento em 3 pequenos parágrafos: 1. Diagnóstico do ritmo de gastos atual vs passado. 2. Dica de Casal. 3. Ideia de Date econômico para o final do mês. Use linguagem jovem e direta. IMPORTANTE: NÃO use nenhum emoji na sua resposta.`;
       
       const resposta = await enviarMensagemParaGemini(pergunta, contexto);
       
@@ -163,7 +187,6 @@ export const OrcamentoLivreScreen = ({
     catch (error) { console.error(error); } finally { setIsProcessando(false); }
   };
 
-  // ✨ CORRIGIR / REABRIR
   const handleReabrirPasseio = async (saida: any) => {
     if (!window.confirm(`Deseja reabrir "${saida.titulo}" para correção? Isso removerá os lançamentos atuais do Hub.`)) return;
 
@@ -296,14 +319,13 @@ export const OrcamentoLivreScreen = ({
           {icons.voltar} Voltar ao Hub
         </button>
         <h2 style={{ color: 'var(--text-h)', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* ✨ SVG de Bússola/Aventura no lugar da pipoca */}
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
           Orçamento de Lazer
         </h2>
         <p style={{ color: 'var(--text)', fontSize: '0.95rem', lineHeight: '1.5', margin: 0 }}>
           {restanteLazer > 0 
-            ? `Olá! Vocês ainda têm ${formatMoney(restanteLazer)} para aproveitar. Planejem os passeios aqui para viver o agora sem comprometer o futuro.`
-            : `Atenção! O orçamento deste mês acabou. Que tal pedir uma análise ao co-piloto e focar em programações caseiras?`}
+            ? `Vocês ainda têm ${formatMoney(restanteLazer)} para aproveitar este mês. Planejem os passeios aqui para viver o agora sem comprometer o futuro.`
+            : `Atenção! O orçamento deste mês acabou. Foco em programações caseiras ou analisem os dados com a IA.`}
         </p>
       </div>
 
@@ -357,7 +379,6 @@ export const OrcamentoLivreScreen = ({
 
         <button onClick={gerarAnaliseCompleta} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: 'var(--bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '0.95rem', cursor: 'pointer', transition: '0.2s', display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }}>
           Saber mais e ver ideias de passeio 
-          {/* ✨ SVG Lâmpada no lugar da Lâmpada de Emoji */}
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .34 2.02.9 2.8.76.75 1.23 1.51 1.41 2.5"></path></svg>
         </button>
       </div>
@@ -427,11 +448,12 @@ export const OrcamentoLivreScreen = ({
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Próximos Momentos</h3>
-        {saidas.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text)', padding: '40px', border: '1px dashed var(--border)', borderRadius: '20px' }}>Nenhum plano para este mês ainda. Que tal criar um jantar especial?</p>}
+      {/* ✨ LISTA DO MÊS ATUAL */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '40px' }}>
+        <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Momentos Deste Mês</h3>
+        {saidasMesAtual.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text)', padding: '40px', border: '1px dashed var(--border)', borderRadius: '20px' }}>Nenhum plano para este mês ainda. Que tal criar um jantar especial?</p>}
         
-        {saidas.sort((a:any, b:any) => (a.status === 'concluido' ? 1 : -1)).map((saida: any) => (
+        {saidasMesAtual.sort((a:any, b:any) => (a.status === 'concluido' ? 1 : -1)).map((saida: any) => (
           <div key={saida.id} style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: `1px solid ${saida.status === 'concluido' ? 'rgba(16, 185, 129, 0.2)' : 'var(--border)'}`, opacity: saida.status === 'concluido' ? 0.6 : 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'flex-start' }}>
               <div>
@@ -455,6 +477,31 @@ export const OrcamentoLivreScreen = ({
           </div>
         ))}
       </div>
+
+      {/* ✨ LISTA DO HISTÓRICO (MESES ANTERIORES) */}
+      {saidasHistorico.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <h3 style={{ margin: 0, color: 'var(--text-h)', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>Histórico de Passeios</h3>
+          
+          {saidasHistorico.sort((a:any, b:any) => {
+            const dataA = new Date(a.dataRaw || a.data).getTime();
+            const dataB = new Date(b.dataRaw || b.data).getTime();
+            return dataB - dataA;
+          }).map((saida: any) => (
+            <div key={saida.id} style={{ background: 'var(--bg)', padding: '16px', borderRadius: '20px', border: '1px solid var(--border)', opacity: 0.7 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1rem' }}>{saida.titulo}</h4>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text)' }}>{saida.data} • {saida.status === 'concluido' ? 'Concluído' : 'Expirado/Pendente'}</span>
+                </div>
+                <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--text-h)' }}>
+                  {formatMoney(saida.estimado)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {modalIAAberto && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
@@ -496,7 +543,6 @@ export const OrcamentoLivreScreen = ({
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px' }}></div>
                 
-                {/* ✨ SVG Check Circle no lugar da Fatia de Pizza */}
                 <h3 style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                   Como foi o passeio?
@@ -541,7 +587,6 @@ export const OrcamentoLivreScreen = ({
 
             {passoConclusao === 'sobra' && (
               <div style={{ textAlign: 'center' }}>
-                {/* ✨ SVG Troféu/Selo no lugar do Confete */}
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', color: '#10b981' }}>
                   <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>
                 </div>
