@@ -1,35 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { doc, updateDoc, addDoc, collection, serverTimestamp, deleteDoc, query, getDocs } from 'firebase/firestore';
-import { auth, db } from '../../services/firebase';
+import { db } from '../../services/firebase';
 import { enviarMensagemParaGemini } from '../../services/gemini';
 
 export const OrcamentoLivreScreen = ({ 
   setActiveView, casalId, saidas, limiteMensalLazer, 
-  parceiro1, parceiro2, formatMoney, icons, metas 
+  parceiro1, parceiro2, corP1, corP2, formatMoney, icons
 }: any) => {
   
   const [isProcessando, setIsProcessando] = useState(false);
+  const [dicaRapida, setDicaRapida] = useState('Analisando o clima financeiro...');
   
-  // Estados da IA
-  const [mensagemIA, setMensagemIA] = useState('');
-  const [dicaRapida, setDicaRapida] = useState('');
-  const [carregandoDica, setCarregandoDica] = useState(true);
-  const [modalIAAberto, setModalIAAberto] = useState(false);
-  const [insightCompletoIA, setInsightCompletoIA] = useState('');
-  const [carregandoIACompleta, setCarregandoIACompleta] = useState(false);
-  
-  // Estados do Simulador/Editor
   const [simuladorAberto, setSimuladorAberto] = useState(false);
   const [idEdicao, setIdEdicao] = useState<string | null>(null);
   const [simTitulo, setSimTitulo] = useState('');
   const [simData, setSimData] = useState('');
   const [simItems, setSimItems] = useState([{ id: 1, nome: '', valor: '', responsavel: 'ambos' }]);
 
-  // Estados de Edição do Limite
+  const [saidaExpandida, setSaidaExpandida] = useState<string | null>(null);
+
   const [editandoLimite, setEditandoLimite] = useState(false);
   const [novoLimiteInput, setNovoLimiteInput] = useState(limiteMensalLazer.toString());
 
-  // Estados de Conclusão
+  // ✨ MODAIS DE CONFIRMAÇÃO RESTAURADOS
   const [modalConcluir, setModalConcluir] = useState<any | null>(null);
   const [passoConclusao, setPassoConclusao] = useState<'pergunta' | 'ajuste' | 'sobra'>('pergunta');
   const [valorRealFinal, setValorRealFinal] = useState('');
@@ -38,13 +31,12 @@ export const OrcamentoLivreScreen = ({
   const [valorP2Real, setValorP2Real] = useState('');
   const [sobraDetectada, setSobraDetectada] = useState(0);
 
-  // ✨ FILTRO INTELIGENTE DE MÊS ATUAL VS HISTÓRICO
   const hoje = new Date();
   const mesAtualNum = hoje.getMonth();
   const anoAtualNum = hoje.getFullYear();
-  const ultimoDiaMes = new Date(anoAtualNum, mesAtualNum + 1, 0).getDate();
-  const diasParaRenovar = ultimoDiaMes - hoje.getDate() + 1;
+  const diasParaRenovar = new Date(anoAtualNum, mesAtualNum + 1, 0).getDate() - hoje.getDate() + 1;
 
+  // ✨ HISTÓRICO ANTIGO E MÊS ATUAL SEPARADOS NOVAMENTE
   const saidasMesAtual: any[] = [];
   const saidasHistorico: any[] = [];
 
@@ -52,79 +44,51 @@ export const OrcamentoLivreScreen = ({
     let isMesAtual = true;
     if (saida.dataRaw) {
       const [anoStr, mesStr] = saida.dataRaw.split('-');
-      if (parseInt(anoStr) !== anoAtualNum || parseInt(mesStr) - 1 !== mesAtualNum) {
-        isMesAtual = false;
-      }
+      if (parseInt(anoStr) !== anoAtualNum || parseInt(mesStr) - 1 !== mesAtualNum) isMesAtual = false;
     }
-    // Se não tiver data salva, assume mês atual para não sumir do mapa
-    if (isMesAtual) {
-      saidasMesAtual.push(saida);
+    if (isMesAtual) saidasMesAtual.push(saida);
+    else saidasHistorico.push(saida);
+  });
+
+  let gastoP1 = 0;
+  let gastoP2 = 0;
+
+  saidasMesAtual.forEach((s: any) => {
+    if (s.status === 'concluido' && s.splitReal) {
+      gastoP1 += s.splitReal.p1 || 0;
+      gastoP2 += s.splitReal.p2 || 0;
+    } else if (s.itens && s.itens.length > 0) {
+      s.itens.forEach((i: any) => {
+        const val = Number(i.valor || 0);
+        if (i.responsavel === 'p1') gastoP1 += val;
+        else if (i.responsavel === 'p2') gastoP2 += val;
+        else { gastoP1 += val / 2; gastoP2 += val / 2; }
+      });
     } else {
-      saidasHistorico.push(saida);
+      gastoP1 += (s.estimado || 0) / 2;
+      gastoP2 += (s.estimado || 0) / 2;
     }
   });
 
-  // ✨ CÁLCULO BASEADO APENAS NO MÊS ATUAL
-  const gastoEPlanejado = saidasMesAtual.reduce((acc: number, curr: any) => acc + Number(curr.estimado || 0), 0);
+  const gastoEPlanejado = gastoP1 + gastoP2;
   const restanteLazer = limiteMensalLazer - gastoEPlanejado;
   const porcentagemUso = Math.min((gastoEPlanejado / limiteMensalLazer) * 100, 100);
-  
   const totalSimulacao = simItems.reduce((acc: number, curr: any) => acc + Number(curr.valor || 0), 0);
 
-  // IA LIGADA SEM EMOJIS (Usando apenas mês atual para saldo e histórico geral para análise)
   useEffect(() => {
     let isMounted = true;
     const buscarDicaRapida = async () => {
       if (!casalId) return;
       try {
-        const contexto = `O casal ${parceiro1} e ${parceiro2} tem um limite de lazer mensal de R$ ${limiteMensalLazer}. Neste mês, já comprometeram R$ ${gastoEPlanejado}, restando R$ ${restanteLazer} para os próximos ${diasParaRenovar} dias.`;
-        const pergunta = `Escreva UMA dica urgente, rápida e muito interessante (máximo 2 linhas) para eles lerem agora. Seja amigável e direto ao ponto. IMPORTANTE: NÃO use nenhum emoji na sua resposta. Avalie se estão bem de saldo ou se precisam de travar os gastos.`;
-        
-        const resposta = await enviarMensagemParaGemini(pergunta, contexto);
-        
-        if (isMounted && resposta) {
-          setDicaRapida(resposta.replace(/^"|"$/g, ''));
-        }
-      } catch (e) {
-        if (isMounted) setDicaRapida("Mantenham o foco! Conversem sobre os próximos passos para aproveitarem o mês da melhor forma.");
-      } finally {
-        if (isMounted) setCarregandoDica(false);
-      }
+        const ctx = `Limite: ${limiteMensalLazer}. Gastos: ${gastoEPlanejado}. Sobra: ${restanteLazer}. Dias: ${diasParaRenovar}.`;
+        const pg = `Dê 1 dica rápida de 1 linha sobre como aproveitar esse orçamento. Sem emojis.`;
+        const resposta = await enviarMensagemParaGemini(pg, ctx);
+        if (isMounted && resposta) setDicaRapida(resposta.replace(/^"|"$/g, ''));
+      } catch (e) { }
     };
     buscarDicaRapida();
     return () => { isMounted = false; };
-  }, [casalId, parceiro1, parceiro2, gastoEPlanejado, limiteMensalLazer, restanteLazer, diasParaRenovar]); 
-
-  const gerarAnaliseCompleta = async () => {
-    setModalIAAberto(true);
-    setCarregandoIACompleta(true);
-    setInsightCompletoIA('');
-    try {
-      const históricoPassadoStr = saidasHistorico.map((s:any) => `${s.titulo} (R$ ${s.estimado})`).join(', ') || 'Sem histórico anterior';
-      const mesAtualStr = saidasMesAtual.map((s:any) => `${s.titulo} (${s.status} - R$ ${s.estimado})`).join(', ') || 'Nenhum passeio planejado este mês';
-
-      const contexto = `Casal: ${parceiro1} e ${parceiro2}. Limite mensal: R$ ${limiteMensalLazer}. Gastos deste mês: R$ ${gastoEPlanejado}. Saldo restante: R$ ${restanteLazer} para ${diasParaRenovar} dias. Histórico de meses anteriores: ${históricoPassadoStr}. Passeios do mês atual: ${mesAtualStr}.`;
-      const pergunta = `Faça uma análise profunda do ritmo financeiro deles neste momento em 3 pequenos parágrafos: 1. Diagnóstico do ritmo de gastos atual vs passado. 2. Dica de Casal. 3. Ideia de Date econômico para o final do mês. Use linguagem jovem e direta. IMPORTANTE: NÃO use nenhum emoji na sua resposta.`;
-      
-      const resposta = await enviarMensagemParaGemini(pergunta, contexto);
-      
-      if (resposta) setInsightCompletoIA(resposta);
-      else setInsightCompletoIA("Não consegui gerar a análise agora. Tente de novo em alguns minutos!");
-    } catch (e) {
-      setInsightCompletoIA("A ligação com o servidor falhou. Verifique a sua internet!");
-    } finally { setCarregandoIACompleta(false); }
-  };
-
-  const gerarMensagemSobraComIA = async (valor: number, passeio: string) => {
-    setMensagemIA(`Aí sim! Sobrou dinheiro do passeio! Que tal jogar essa grana extra direto na meta de vocês?`);
-    try {
-      const contexto = `${parceiro1} e ${parceiro2} economizaram R$ ${valor} no passeio "${passeio}". O limite deles é R$ ${limiteMensalLazer} e ainda restam R$ ${restanteLazer} no mês, faltando ${diasParaRenovar} dias.`;
-      const pergunta = `Escreva uma frase curta (máximo 2 linhas), bem animada, comemorando essa economia e sugerindo guardar o valor. IMPORTANTE: NÃO use nenhum emoji na sua resposta.`;
-      
-      const resposta = await enviarMensagemParaGemini(pergunta, contexto);
-      if (resposta) setMensagemIA(resposta.replace(/^"|"$/g, ''));
-    } catch (e) {}
-  };
+  }, [casalId, limiteMensalLazer, gastoEPlanejado]); 
 
   const handleSalvarLimite = async () => {
     if (!casalId || !novoLimiteInput) return;
@@ -132,8 +96,7 @@ export const OrcamentoLivreScreen = ({
       setIsProcessando(true);
       await updateDoc(doc(db, 'casais', casalId), { limiteLazer: Number(novoLimiteInput) });
       setEditandoLimite(false);
-    } catch (error) { console.error(error); }
-    finally { setIsProcessando(false); }
+    } catch (error) {} finally { setIsProcessando(false); }
   };
 
   const abrirNovoPlano = () => {
@@ -142,7 +105,8 @@ export const OrcamentoLivreScreen = ({
     setSimuladorAberto(true);
   };
 
-  const abrirEdicao = (plano: any) => {
+  const abrirEdicao = (plano: any, e: any) => {
+    e.stopPropagation();
     setIdEdicao(plano.id); setSimTitulo(plano.titulo); setSimData(plano.dataRaw || ''); 
     setSimItems(plano.itens || []); setSimuladorAberto(true);
   };
@@ -151,44 +115,27 @@ export const OrcamentoLivreScreen = ({
     if (!casalId || !simTitulo || totalSimulacao <= 0) return;
     try {
       setIsProcessando(true);
-      const dadosPlano = {
-        titulo: simTitulo,
-        data: simData ? new Date(simData + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'A definir',
+      const dados = {
+        titulo: simTitulo, data: simData ? new Date(simData + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'A definir',
         dataRaw: simData, estimado: totalSimulacao, status: 'planejado', itens: simItems, updatedAt: serverTimestamp()
       };
-      if (idEdicao) await updateDoc(doc(db, 'casais', casalId, 'saidas', idEdicao), dadosPlano);
-      else await addDoc(collection(db, 'casais', casalId, 'saidas'), { ...dadosPlano, createdAt: serverTimestamp() });
+      if (idEdicao) await updateDoc(doc(db, 'casais', casalId, 'saidas', idEdicao), dados);
+      else await addDoc(collection(db, 'casais', casalId, 'saidas'), { ...dados, createdAt: serverTimestamp() });
       setSimuladorAberto(false);
-    } catch (error) { console.error(error); }
-    finally { setIsProcessando(false); }
+    } catch (error) {} finally { setIsProcessando(false); }
   };
 
   const handleExcluirPlano = async (id: string) => {
-    if (!window.confirm("Deseja cancelar e excluir este roteiro definitivamente?")) return;
+    if (!window.confirm("Deseja apagar este plano?")) return;
     try { 
-      setIsProcessando(true); 
-      const saidaAlvo = saidas.find((s:any) => s.id === id);
-      
-      if (saidaAlvo && saidaAlvo.status === 'concluido') {
-        const q = query(collection(db, 'casais', casalId, 'despesas_rapidas'));
-        const querySnapshot = await getDocs(q);
-        const deletarPromises: any[] = [];
-        querySnapshot.forEach((despesaDoc) => {
-          if (despesaDoc.data().desc?.includes(saidaAlvo.titulo)) {
-            deletarPromises.push(deleteDoc(doc(db, 'casais', casalId, 'despesas_rapidas', despesaDoc.id)));
-          }
-        });
-        await Promise.all(deletarPromises);
-      }
-      
-      await deleteDoc(doc(db, 'casais', casalId, 'saidas', id)); 
-      setSimuladorAberto(false); 
-    } 
-    catch (error) { console.error(error); } finally { setIsProcessando(false); }
+      setIsProcessando(true); await deleteDoc(doc(db, 'casais', casalId, 'saidas', id)); setSimuladorAberto(false); 
+    } catch (error) {} finally { setIsProcessando(false); }
   };
 
-  const handleReabrirPasseio = async (saida: any) => {
-    if (!window.confirm(`Deseja reabrir "${saida.titulo}" para correção? Isso removerá os lançamentos atuais do Hub.`)) return;
+  // ✨ RESTAURADO: REABRIR PASSEIO CONCLUÍDO
+  const handleReabrirPasseio = async (saida: any, e: any) => {
+    e.stopPropagation();
+    if (!window.confirm(`Deseja reabrir "${saida.titulo}" para correção? Isso removerá a cobrança atual.`)) return;
 
     try {
       setIsProcessando(true);
@@ -202,16 +149,17 @@ export const OrcamentoLivreScreen = ({
       });
       await Promise.all(deletarPromises);
       await updateDoc(doc(db, 'casais', casalId, 'saidas', saida.id), { status: 'planejado' });
-      abrirEdicao(saida);
+      abrirEdicao(saida, e);
     } catch (error) {
-      console.error(error);
       alert("Erro ao reabrir o passeio.");
     } finally {
       setIsProcessando(false);
     }
   };
 
-  const prepararConclusao = (saida: any) => {
+  // ✨ RESTAURADO: PREPARAR CONCLUSÃO COM MODAL PASSO A PASSO
+  const prepararConclusao = (saida: any, e: any) => {
+    e.stopPropagation();
     setModalConcluir(saida);
     setValorRealFinal(saida.estimado.toString());
 
@@ -269,18 +217,18 @@ export const OrcamentoLivreScreen = ({
         }
       }
 
-      await updateDoc(doc(db, 'casais', casalId, 'saidas', modalConcluir.id), { status: 'concluido', estimado: valorGastoEfetivo });
+      await updateDoc(doc(db, 'casais', casalId, 'saidas', modalConcluir.id), { 
+        status: 'concluido', estimado: valorGastoEfetivo, splitReal: { p1: v1, p2: v2 } 
+      });
 
       if (v1 > 0) {
         await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { 
-          desc: v2 > 0 ? `${modalConcluir.titulo} (${parceiro1})` : modalConcluir.titulo, 
-          pagoPor: parceiro1, valor: v1, data: 'Hoje', createdAt: serverTimestamp() 
+          desc: v2 > 0 ? `${modalConcluir.titulo} (${parceiro1})` : modalConcluir.titulo, pagoPor: parceiro1, valor: v1, data: 'Hoje', createdAt: serverTimestamp() 
         });
       }
       if (v2 > 0) {
         await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { 
-          desc: v1 > 0 ? `${modalConcluir.titulo} (${parceiro2})` : modalConcluir.titulo, 
-          pagoPor: parceiro2, valor: v2, data: 'Hoje', createdAt: serverTimestamp() 
+          desc: v1 > 0 ? `${modalConcluir.titulo} (${parceiro2})` : modalConcluir.titulo, pagoPor: parceiro2, valor: v2, data: 'Hoje', createdAt: serverTimestamp() 
         });
       }
 
@@ -288,213 +236,174 @@ export const OrcamentoLivreScreen = ({
       if (diferenca > 0) {
         setSobraDetectada(diferenca);
         setPassoConclusao('sobra');
-        gerarMensagemSobraComIA(diferenca, modalConcluir.titulo);
       } else {
-        fecharModal();
+        setModalConcluir(null);
       }
-    } catch (e) { console.error(e); }
-    finally { setIsProcessando(false); }
-  };
-
-  const fecharModal = () => { setModalConcluir(null); setMensagemIA(''); };
-
-  const investirSobra = async () => {
-    if (metas.length === 0) return alert("Crie uma meta primeiro!");
-    try {
-      setIsProcessando(true);
-      const meta = metas[0];
-      await updateDoc(doc(db, 'casais', casalId, 'metas', meta.id), {
-        atual: meta.atual + sobraDetectada,
-        historico: [{ id: Date.now().toString(), data: 'Hoje', valor: sobraDetectada, descricao: `Sobra: ${modalConcluir?.titulo}` }, ...(meta.historico || [])]
-      });
-      fecharModal();
     } catch (e) {} finally { setIsProcessando(false); }
   };
 
   return (
-    <div className="hub-fintech-container animate-fade-in" style={{ paddingBottom: '120px' }}>
+    <div className="hub-fintech-container animate-fade-in" style={{ paddingBottom: '80px' }}>
       
-      <div style={{ marginBottom: '24px' }}>
-        <button className="btn-voltar" onClick={() => setActiveView('hub')} style={{ marginBottom: '16px' }}>
-          {icons.voltar} Voltar ao Hub
-        </button>
-        <h2 style={{ color: 'var(--text-h)', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
-          Orçamento de Lazer
-        </h2>
-        <p style={{ color: 'var(--text)', fontSize: '0.95rem', lineHeight: '1.5', margin: 0 }}>
-          {restanteLazer > 0 
-            ? `Vocês ainda têm ${formatMoney(restanteLazer)} para aproveitar este mês. Planejem os passeios aqui para viver o agora sem comprometer o futuro.`
-            : `Atenção! O orçamento deste mês acabou. Foco em programações caseiras ou analisem os dados com a IA.`}
-        </p>
+      {/* HEADER DA TELA */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <h2 style={{ color: 'var(--text-h)', margin: 0, fontSize: '1.4rem' }}>Orçamento Lazer</h2>
       </div>
 
-      <div className="hub-balance-card" style={{ padding: '24px', marginBottom: '24px', position: 'relative' }}>
+      {/* CARTÃO DE ORÇAMENTO */}
+      <div className="hub-balance-card" style={{ padding: '24px', background: 'var(--code-bg)', borderRadius: '28px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', opacity: 0.7, textTransform: 'uppercase' }}>Mesada do Casal</span>
+            <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>O Teto do Mês</span>
             {editandoLimite ? (
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <input type="number" value={novoLimiteInput} onChange={e => setNovoLimiteInput(e.target.value)} style={{ width: '100px', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)' }} />
-                <button onClick={handleSalvarLimite} disabled={isProcessando} style={{ padding: '8px 12px', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold' }}>OK</button>
+                <input type="number" value={novoLimiteInput} onChange={e => setNovoLimiteInput(e.target.value)} style={{ width: '100px', padding: '10px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)' }} />
+                <button onClick={handleSalvarLimite} disabled={isProcessando} style={{ padding: '10px', background: 'var(--accent)', border: 'none', borderRadius: '12px', color: '#fff', fontWeight: 'bold' }}>✓</button>
               </div>
             ) : (
-              <h2 style={{ margin: '4px 0', color: 'var(--text-h)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ margin: '4px 0', color: 'var(--text-h)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.8rem' }}>
                 {formatMoney(limiteMensalLazer)}
-                <button onClick={() => setEditandoLimite(true)} style={{ background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                <button onClick={() => setEditandoLimite(true)} style={{ background: 'var(--bg)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  ✎
                 </button>
               </h2>
             )}
           </div>
           <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'var(--accent)' }}>RENOVA EM {diasParaRenovar} DIAS</span>
-            <h2 style={{ margin: '4px 0', color: restanteLazer >= 0 ? '#10b981' : '#ef4444' }}>{formatMoney(restanteLazer)}</h2>
+            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--accent)' }}>SOBRA ATUAL</span>
+            <h2 style={{ margin: '4px 0', fontSize: '1.5rem', color: restanteLazer >= 0 ? '#10b981' : '#ef4444' }}>{formatMoney(restanteLazer)}</h2>
           </div>
         </div>
-        <div style={{ width: '100%', height: '10px', background: 'var(--bg)', borderRadius: '10px', overflow: 'hidden', marginTop: '15px' }}>
+
+        <div style={{ width: '100%', height: '12px', background: 'var(--bg)', borderRadius: '10px', overflow: 'hidden', margin: '20px 0 12px 0' }}>
           <div style={{ width: `${porcentagemUso}%`, height: '100%', background: porcentagemUso > 90 ? '#ef4444' : 'var(--accent)', transition: 'width 1s ease' }}></div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 600 }}>
+          <div><span style={{ color: corP1 }}>{parceiro1}</span> usou: {formatMoney(gastoP1)}</div>
+          <div><span style={{ color: corP2 }}>{parceiro2}</span> usou: {formatMoney(gastoP2)}</div>
         </div>
       </div>
 
-      <div style={{ background: 'linear-gradient(145deg, var(--code-bg) 0%, rgba(139, 92, 246, 0.05) 100%)', border: '1px solid rgba(139, 92, 246, 0.2)', borderRadius: '24px', padding: '24px', marginBottom: '32px', position: 'relative' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-          <div style={{ width: 40, height: 40, background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-          </div>
-          <h3 style={{ margin: 0, color: 'var(--accent)', fontSize: '1.1rem' }}>O Co-piloto sugere...</h3>
-        </div>
-        
-        {carregandoDica ? (
-          <div style={{ display: 'flex', gap: '6px', padding: '10px 0', alignItems: 'center' }}>
-            <div className="typing-dot" style={{ background: 'var(--text)' }}></div>
-            <div className="typing-dot" style={{ background: 'var(--text)' }}></div>
-            <div className="typing-dot" style={{ background: 'var(--text)' }}></div>
-          </div>
-        ) : (
-          <p style={{ margin: '0 0 20px 0', fontSize: '1rem', color: 'var(--text-h)', lineHeight: '1.5', fontStyle: 'italic' }}>
-            "{dicaRapida}"
-          </p>
-        )}
-
-        <button onClick={gerarAnaliseCompleta} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: 'var(--bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '0.95rem', cursor: 'pointer', transition: '0.2s', display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }}>
-          Saber mais e ver ideias de passeio 
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .34 2.02.9 2.8.76.75 1.23 1.51 1.41 2.5"></path></svg>
-        </button>
+      <div style={{ background: 'rgba(138, 43, 226, 0.05)', padding: '16px', borderRadius: '20px', border: '1px solid rgba(138, 43, 226, 0.1)', marginBottom: '24px' }}>
+        <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.9rem', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '1.2rem' }}>💡</span> {dicaRapida}
+        </p>
       </div>
 
       {!simuladorAberto && (
-        <button onClick={abrirNovoPlano} style={{ width: '100%', padding: '18px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', marginBottom: '32px', boxShadow: '0 6px 20px rgba(139, 92, 246, 0.3)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Planejar Roteiro
+        <button onClick={abrirNovoPlano} style={{ width: '100%', padding: '18px', borderRadius: '20px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1.05rem', marginBottom: '32px', boxShadow: '0 4px 15px rgba(138, 43, 226, 0.3)' }}>
+          + Planejar Novo Passeio
         </button>
       )}
 
+      {/* SIMULADOR EM LINHA */}
       {simuladorAberto && (
-        <div className="animate-fade-in" style={{ background: 'var(--code-bg)', border: '2px solid var(--accent)', borderRadius: '24px', padding: '24px', marginBottom: '32px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h4 style={{ margin: 0, color: 'var(--accent)' }}>{idEdicao ? 'Ajustar Detalhes' : 'O que vamos aprontar?'}</h4>
-            {idEdicao && (
-              <button onClick={() => handleExcluirPlano(idEdicao)} disabled={isProcessando} style={{ background: 'none', border: 'none', color: '#ef4444', fontWeight: 'bold', cursor: 'pointer', padding: '8px' }}>
-                Excluir
-              </button>
-            )}
-          </div>
-          
-          <input type="text" placeholder="Nome da Saída" value={simTitulo} onChange={e => setSimTitulo(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginBottom: '16px', fontSize: '1rem' }} />
-          
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', marginLeft: '4px' }}>DATA PREVISTA</label>
-            <input type="date" value={simData} onChange={e => setSimData(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', fontSize: '1rem' }} />
-          </div>
+        <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '24px', marginBottom: '32px', border: '1px solid var(--border)' }}>
+          <h4 style={{ margin: '0 0 20px 0', color: 'var(--text-h)' }}>{idEdicao ? 'Ajustar Plano' : 'Novo Rolezinho'}</h4>
+          <input type="text" placeholder="Nome do Passeio" value={simTitulo} onChange={e => setSimTitulo(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg)', marginBottom: '16px' }} />
+          <input type="date" value={simData} onChange={e => setSimData(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg)', marginBottom: '24px' }} />
 
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-h)', fontWeight: 'bold' }}>ITENS DO CUSTO</span>
-            
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-h)', fontWeight: 'bold' }}>ITENS DO CUSTO</span>
             {simItems.map((item: any) => (
-              <div key={item.id} style={{ background: 'var(--bg)', padding: '16px', borderRadius: '16px', marginTop: '12px', border: '1px solid var(--border)' }}>
+              <div key={item.id} style={{ background: 'var(--bg)', padding: '16px', borderRadius: '20px', marginTop: '12px' }}>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-                  <input type="text" value={item.nome} onChange={e => setSimItems(simItems.map(i => i.id === item.id ? { ...i, nome: e.target.value } : i))} placeholder="Ex: Combustível" style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', color: 'var(--text-h)', padding: '8px' }} />
-                  <input type="number" value={item.valor} onChange={e => setSimItems(simItems.map(i => i.id === item.id ? { ...i, valor: e.target.value } : i))} placeholder="R$" style={{ width: '80px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', color: 'var(--text-h)', padding: '8px' }} />
+                  <input type="text" value={item.nome} onChange={e => setSimItems(simItems.map(i => i.id === item.id ? { ...i, nome: e.target.value } : i))} placeholder="Ex: Combustível" style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }} />
+                  <input type="number" value={item.valor} onChange={e => setSimItems(simItems.map(i => i.id === item.id ? { ...i, valor: e.target.value } : i))} placeholder="R$" style={{ width: '90px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }} />
                 </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                   <div style={{ display: 'flex', gap: '8px' }}>
-                      {['ambos', 'p1', 'p2'].map(opt => (
-                        <button key={opt} onClick={() => setSimItems(simItems.map(i => i.id === item.id ? { ...i, responsavel: opt } : i))} 
-                          style={{ 
-                            padding: '12px 16px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid var(--border)',
-                            background: item.responsavel === opt ? 'var(--accent)' : 'var(--code-bg)',
-                            color: item.responsavel === opt ? '#fff' : 'var(--text)'
-                          }}>
-                          {opt === 'ambos' ? 'Nós' : opt === 'p1' ? parceiro1 : parceiro2}
-                        </button>
-                      ))}
-                   </div>
-                   <button onClick={() => setSimItems(simItems.filter(i => i.id !== item.id))} style={{ color: '#ef4444', background: 'none', border: 'none', padding: '10px' }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                   </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {['ambos', 'p1', 'p2'].map(opt => (
+                    <button key={opt} onClick={() => setSimItems(simItems.map(i => i.id === item.id ? { ...i, responsavel: opt } : i))} 
+                      style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '0.8rem', border: 'none', background: item.responsavel === opt ? 'var(--accent)' : 'var(--code-bg)', color: item.responsavel === opt ? '#fff' : 'var(--text)' }}>
+                      {opt === 'ambos' ? 'Meio a meio' : opt === 'p1' ? parceiro1 : parceiro2}
+                    </button>
+                  ))}
                 </div>
               </div>
             ))}
-            
-            <button onClick={() => setSimItems([...simItems, { id: Date.now(), nome: '', valor: '', responsavel: 'ambos' }])} style={{ width: '100%', padding: '16px', marginTop: '16px', background: 'transparent', border: '2px dashed var(--accent)', color: 'var(--accent)', borderRadius: '16px', fontWeight: 'bold' }}>+ Adicionar Gasto</button>
+            <button onClick={() => setSimItems([...simItems, { id: Date.now(), nome: '', valor: '', responsavel: 'ambos' }])} style={{ width: '100%', padding: '16px', marginTop: '16px', background: 'transparent', border: '2px dashed var(--border)', color: 'var(--text)', borderRadius: '16px', fontWeight: 'bold' }}>+ Adicionar Item</button>
           </div>
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
-            <button onClick={() => setSimuladorAberto(false)} style={{ flex: 1, padding: '18px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', fontWeight: 'bold' }}>Cancelar</button>
-            <button onClick={handleSalvarPlano} disabled={isProcessando} style={{ flex: 2, padding: '18px', borderRadius: '14px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold' }}>{idEdicao ? 'Salvar Alterações' : 'Confirmar Plano'}</button>
+            <button onClick={() => setSimuladorAberto(false)} style={{ flex: 1, padding: '16px', borderRadius: '16px', background: 'var(--bg)', color: 'var(--text)' }}>Cancelar</button>
+            <button onClick={handleSalvarPlano} disabled={isProcessando} style={{ flex: 2, padding: '16px', borderRadius: '16px', background: 'var(--accent)', color: '#fff' }}>Salvar</button>
           </div>
+          {idEdicao && <button onClick={() => handleExcluirPlano(idEdicao)} style={{ width: '100%', marginTop: '16px', background: 'transparent', border: 'none', color: '#ef4444', fontWeight: 'bold' }}>Apagar Plano</button>}
         </div>
       )}
 
-      {/* ✨ LISTA DO MÊS ATUAL */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '40px' }}>
-        <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Momentos Deste Mês</h3>
-        {saidasMesAtual.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text)', padding: '40px', border: '1px dashed var(--border)', borderRadius: '20px' }}>Nenhum plano para este mês ainda. Que tal criar um jantar especial?</p>}
-        
-        {saidasMesAtual.sort((a:any, b:any) => (a.status === 'concluido' ? 1 : -1)).map((saida: any) => (
-          <div key={saida.id} style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: `1px solid ${saida.status === 'concluido' ? 'rgba(16, 185, 129, 0.2)' : 'var(--border)'}`, opacity: saida.status === 'concluido' ? 0.6 : 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'flex-start' }}>
-              <div>
-                <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>{saida.titulo}</h4>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{saida.data} • {saida.status === 'concluido' ? 'Concluído' : 'Planejado'}</span>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ color: 'var(--text-h)', fontWeight: 'bold', fontSize: '1.2rem' }}>{formatMoney(saida.estimado)}</div>
-                
-                {saida.status === 'planejado' ? (
-                  <button onClick={() => abrirEdicao(saida)} disabled={isProcessando} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.8rem', marginTop: '4px' }}>Editar</button>
-                ) : (
-                  <button onClick={() => handleReabrirPasseio(saida)} disabled={isProcessando} style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontWeight: 'bold', fontSize: '0.75rem', padding: '6px 10px', borderRadius: '8px', marginTop: '6px' }}>Corrigir / Reabrir</button>
-                )}
-              </div>
-            </div>
-
-            {saida.status === 'planejado' && (
-              <button onClick={() => prepararConclusao(saida)} disabled={isProcessando} style={{ width: '100%', padding: '14px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid #10b981', borderRadius: '14px', fontWeight: 'bold', fontSize: '0.9rem', marginTop: '8px' }}>Concluir Passeio</button>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* ✨ LISTA DO HISTÓRICO (MESES ANTERIORES) */}
-      {saidasHistorico.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <h3 style={{ margin: 0, color: 'var(--text-h)', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>Histórico de Passeios</h3>
-          
-          {saidasHistorico.sort((a:any, b:any) => {
-            const dataA = new Date(a.dataRaw || a.data).getTime();
-            const dataB = new Date(b.dataRaw || b.data).getTime();
-            return dataB - dataA;
-          }).map((saida: any) => (
-            <div key={saida.id} style={{ background: 'var(--bg)', padding: '16px', borderRadius: '20px', border: '1px solid var(--border)', opacity: 0.7 }}>
+      {/* LISTA DE SAÍDAS DO MÊS */}
+      <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-h)', fontSize: '1.1rem' }}>Passeios do Mês</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {saidasMesAtual.map((saida: any) => {
+          const isExpandido = saidaExpandida === saida.id;
+          return (
+            <div 
+              key={saida.id} 
+              onClick={() => setSaidaExpandida(isExpandido ? null : saida.id)}
+              style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: `1px solid ${saida.status === 'concluido' ? 'rgba(16, 185, 129, 0.2)' : 'var(--border)'}`, transition: '0.3s', cursor: 'pointer' }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1rem' }}>{saida.titulo}</h4>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text)' }}>{saida.data} • {saida.status === 'concluido' ? 'Concluído' : 'Expirado/Pendente'}</span>
+                  <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {saida.status === 'concluido' ? '✅' : '⏳'} {saida.titulo}
+                  </h4>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{saida.data}</span>
                 </div>
-                <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--text-h)' }}>
+                <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem', color: saida.status === 'concluido' ? '#10b981' : 'var(--text-h)' }}>
+                  {formatMoney(saida.estimado)}
+                </div>
+              </div>
+
+              {/* DETALHES DA FATURA */}
+              {isExpandido && (
+                <div className="animate-fade-in" style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px dashed var(--border)' }}>
+                  <p style={{ margin: '0 0 12px 0', fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>O que pagamos:</p>
+                  
+                  {saida.itens && saida.itens.length > 0 ? (
+                    saida.itens.map((item: any, index: number) => (
+                      <div key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '8px', color: 'var(--text-h)' }}>
+                        <span>• {item.nome || 'Item sem nome'} <span style={{fontSize: '0.7rem', color: 'var(--text)'}}>({item.responsavel === 'ambos' ? 'Dividido' : item.responsavel === 'p1' ? parceiro1 : parceiro2})</span></span>
+                        <span>{formatMoney(Number(item.valor))}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text)', margin: 0 }}>Nenhum item detalhado neste plano.</p>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                    {saida.status === 'planejado' ? (
+                       <>
+                         <button onClick={(e) => abrirEdicao(saida, e)} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'var(--bg)', color: 'var(--text-h)', border: 'none', fontWeight: 'bold', fontSize: '0.9rem' }}>Editar</button>
+                         <button onClick={(e) => prepararConclusao(saida, e)} disabled={isProcessando} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: '#10b981', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '0.9rem' }}>Concluir ✅</button>
+                       </>
+                    ) : (
+                       <>
+                         <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 'bold', flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Passeio finalizado!</span>
+                         <button onClick={(e) => handleReabrirPasseio(saida, e)} disabled={isProcessando} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', fontWeight: 'bold', fontSize: '0.9rem' }}>Reabrir</button>
+                       </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ✨ HISTÓRICO RESTAURADO */}
+      {saidasHistorico.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '32px' }}>
+          <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>Histórico de Passeios</h3>
+          {saidasHistorico.sort((a:any, b:any) => new Date(b.dataRaw || b.data).getTime() - new Date(a.dataRaw || a.data).getTime()).map((saida: any) => (
+            <div key={saida.id} style={{ background: 'var(--bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', opacity: 0.7 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.05rem' }}>{saida.titulo}</h4>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{saida.data} • {saida.status === 'concluido' ? 'Concluído' : 'Expirado'}</span>
+                </div>
+                <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--text-h)', fontSize: '1.1rem' }}>
                   {formatMoney(saida.estimado)}
                 </div>
               </div>
@@ -503,84 +412,46 @@ export const OrcamentoLivreScreen = ({
         </div>
       )}
 
-      {modalIAAberto && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
-          <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '32px 24px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ width: '50px', height: '5px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px', flexShrink: 0 }}></div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexShrink: 0 }}>
-              <div style={{ width: 48, height: 48, background: 'rgba(139, 92, 246, 0.1)', color: 'var(--accent)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-              </div>
-              <div>
-                <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Análise do Co-piloto</h3>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text)' }}>Personalizada para {parceiro1} & {parceiro2}</span>
-              </div>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', marginBottom: '24px' }}>
-              {carregandoIACompleta ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '16px' }}>
-                  <div className="spinner" style={{ width: '32px', height: '32px', borderTopColor: 'var(--accent)' }}></div>
-                  <p style={{ color: 'var(--text)', fontSize: '0.9rem', textAlign: 'center' }}>Analisando os seus gastos e o histórico...</p>
-                </div>
-              ) : (
-                <div style={{ color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                  {insightCompletoIA}
-                </div>
-              )}
-            </div>
-            <button onClick={() => setModalIAAberto(false)} style={{ width: '100%', padding: '18px', borderRadius: '16px', background: 'var(--code-bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '1rem', flexShrink: 0 }}>
-              Fechar Análise
-            </button>
-          </div>
-        </div>
-      )}
-
+      {/* ✨ MODAL DE CONCLUSÃO DE PASSEIOS (Corrigido com z-index 99999 e overlay fixa) */}
       {modalConcluir && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(10px)' }}>
-          <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '32px 24px 60px' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderRadius: '32px 32px 0 0', padding: '32px 24px 60px', maxHeight: '90vh', overflowY: 'auto' }}>
             
             {passoConclusao === 'pergunta' && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px' }}></div>
-                
-                <h3 style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                  Como foi o passeio?
-                </h3>
+                <h3 style={{ margin: '0 0 12px 0', color: 'var(--text-h)' }}>Como foi o passeio?</h3>
                 <p style={{ color: 'var(--text)', marginBottom: '32px' }}>Gastaram os <strong>{formatMoney(modalConcluir.estimado)}</strong> que planearam?</p>
-                
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <button onClick={() => processarFim(true)} disabled={isProcessando} style={{ padding: '20px', borderRadius: '18px', background: '#10b981', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1.1rem' }}>Sim, certinho!</button>
                   <button onClick={() => setPassoConclusao('ajuste')} disabled={isProcessando} style={{ padding: '20px', borderRadius: '18px', background: 'var(--code-bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '1.1rem' }}>Não, o valor mudou</button>
-                  <button onClick={fecharModal} disabled={isProcessando} style={{ color: 'var(--text)', background: 'none', border: 'none', marginTop: '10px' }}>Ainda não acabou</button>
+                  <button onClick={() => setModalConcluir(null)} disabled={isProcessando} style={{ color: 'var(--text)', background: 'none', border: 'none', marginTop: '10px', fontSize: '1rem', fontWeight: 'bold' }}>Ainda não acabou</button>
                 </div>
               </div>
             )}
 
             {passoConclusao === 'ajuste' && (
               <div>
-                <h3 style={{ marginBottom: '24px', textAlign: 'center' }}>Ajustar Valor Real</h3>
+                <h3 style={{ marginBottom: '24px', textAlign: 'center', color: 'var(--text-h)' }}>Ajustar Valor Real</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div>
                     <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)' }}>QUEM PAGOU?</label>
-                    <select value={quemPagouReal} onChange={e => setQuemPagouReal(e.target.value)} style={{ width: '100%', padding: '16px', marginTop: '8px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
+                    <select value={quemPagouReal} onChange={e => setQuemPagouReal(e.target.value)} style={{ width: '100%', padding: '16px', marginTop: '8px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', outline: 'none' }}>
                       <option value="ambos">Nós dois dividimos</option>
                       <option value={parceiro1}>{parceiro1} pagou tudo</option>
                       <option value={parceiro2}>{parceiro2} pagou tudo</option>
                     </select>
                   </div>
-
                   {quemPagouReal === 'ambos' ? (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                      <div><label style={{ fontSize: '0.7rem' }}>Pago por {parceiro1}</label><input type="number" value={valorP1Real} onChange={e => setValorP1Real(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }} /></div>
-                      <div><label style={{ fontSize: '0.7rem' }}>Pago por {parceiro2}</label><input type="number" value={valorP2Real} onChange={e => setValorP2Real(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }} /></div>
+                      <div><label style={{ fontSize: '0.7rem', color: 'var(--text)' }}>Pago por {parceiro1}</label><input type="number" value={valorP1Real} onChange={e => setValorP1Real(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '4px' }} /></div>
+                      <div><label style={{ fontSize: '0.7rem', color: 'var(--text)' }}>Pago por {parceiro2}</label><input type="number" value={valorP2Real} onChange={e => setValorP2Real(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '4px' }} /></div>
                     </div>
                   ) : (
                     <input type="number" value={valorRealFinal} onChange={e => setValorRealFinal(e.target.value)} placeholder="Valor total real" style={{ width: '100%', padding: '18px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', fontSize: '1.3rem', fontWeight: 'bold', textAlign: 'center' }} />
                   )}
-
                   <button onClick={() => processarFim(false)} disabled={isProcessando} style={{ width: '100%', padding: '20px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold' }}>Confirmar Valor</button>
-                  <button onClick={() => setPassoConclusao('pergunta')} disabled={isProcessando} style={{ width: '100%', background: 'none', border: 'none', color: 'var(--text)' }}>Voltar</button>
+                  <button onClick={() => setPassoConclusao('pergunta')} disabled={isProcessando} style={{ width: '100%', background: 'none', border: 'none', color: 'var(--text)', fontWeight: 'bold' }}>Voltar</button>
                 </div>
               </div>
             )}
@@ -592,15 +463,11 @@ export const OrcamentoLivreScreen = ({
                 </div>
                 <h2 style={{ color: '#10b981', margin: '0 0 12px 0' }}>Sobrou {formatMoney(sobraDetectada)}!</h2>
                 <div style={{ background: 'rgba(139, 92, 246, 0.05)', padding: '20px', borderRadius: '20px', border: '1px solid rgba(139, 92, 246, 0.2)', marginBottom: '32px', textAlign: 'left' }}>
-                   <p style={{ margin: 0, fontStyle: 'italic', fontSize: '0.95rem', color: 'var(--text-h)' }}>"{mensagemIA}"</p>
+                   <p style={{ margin: 0, fontStyle: 'italic', fontSize: '0.95rem', color: 'var(--text-h)' }}>Sobra devolvida ao caixa!</p>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <button onClick={investirSobra} disabled={isProcessando} style={{ padding: '20px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold' }}>Investir na Meta!</button>
-                  <button onClick={fecharModal} disabled={isProcessando} style={{ padding: '20px', borderRadius: '18px', background: 'var(--code-bg)', border: '1px solid var(--border)', color: 'var(--text-h)' }}>Beleza, deixar no saldo livre</button>
-                </div>
+                <button onClick={() => setModalConcluir(null)} disabled={isProcessando} style={{ padding: '20px', width: '100%', borderRadius: '18px', background: 'var(--accent)', border: 'none', color: '#fff', fontWeight: 'bold' }}>Concluir</button>
               </div>
             )}
-
           </div>
         </div>
       )}
