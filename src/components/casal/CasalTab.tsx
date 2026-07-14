@@ -9,7 +9,8 @@ import { MetasScreen } from './MetasScreen';
 import { Desafio200Screen } from './Desafio200Screen';
 import { OnboardingCasal } from './OnboardingCasal';
 
-export const CasalTab: React.FC = () => {
+// ✨ NOVO: Recebemos o activeView e setActiveView das props
+export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = ({ activeView = 'hub', setActiveView = () => {} }) => {
   const user = auth.currentUser;
   
   const [statusVinculo, setStatusVinculo] = useState<'carregando' | 'sem_vinculo' | 'aguardando' | 'convite_recebido' | 'vinculado'>('carregando');
@@ -25,8 +26,9 @@ export const CasalTab: React.FC = () => {
   const [corP1, setCorP1] = useState<string>('#8b5cf6'); 
   const [corP2, setCorP2] = useState<string>('#10b981'); 
 
-  const [activeView, setActiveView] = useState<'hub' | 'cofre' | 'lazer' | 'metas' | 'desafio200'>('hub');
-
+  // ❌ REMOVA a linha do useState do activeView que existia aqui antes!
+  // const [activeView, setActiveView] = useState<'hub' | 'cofre'...
+  
   const [contribuicoes, setContribuicoes] = useState<any[]>([]);
   const [saidas, setSaidas] = useState<any[]>([]);
   const [metas, setMetas] = useState<any[]>([]);
