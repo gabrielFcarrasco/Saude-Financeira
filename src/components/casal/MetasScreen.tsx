@@ -270,6 +270,7 @@ export const MetasScreen = ({
           </div>
         </div>
       )}
+      <div className="scroll-spacer"></div>
     </div>
   );
 };

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, onSnapshot, arrayUnion } from 'firebase/firestore'; // ✨ Importados novos métodos
 import { db } from '../../services/firebase'; 
 import { frases, versiculos } from './mensagens'; 
 
@@ -26,6 +27,30 @@ export const HubScreen = ({
   const [versiculoDia] = useState(() => versiculos[Math.floor(Math.random() * versiculos.length)]);
   const [textoVersiculo, refVersiculo] = versiculoDia.split(' - ');
 
+  // ✨ ESTADOS DE NOTIFICAÇÕES
+  const [notificacoes, setNotificacoes] = useState<any[]>([]);
+  const [notificacoesAbertas, setNotificacoesAbertas] = useState(false);
+
+  // ✨ ESCUTAR AS NOTIFICAÇÕES EM TEMPO REAL
+  useEffect(() => {
+    if (!casalId) return;
+    const unsub = onSnapshot(doc(db, 'casais', casalId), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().notificacoes) {
+        setNotificacoes(docSnap.data().notificacoes.sort((a:any, b:any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      }
+    });
+    return () => unsub();
+  }, [casalId]);
+
+  const temNotificacaoNaoLida = notificacoes.some((n: any) => !n.lida);
+
+  const limparNotificacoes = async () => {
+    if(!casalId) return;
+    const lidas = notificacoes.map(n => ({...n, lida: true}));
+    await updateDoc(doc(db, 'casais', casalId), { notificacoes: lidas });
+    setNotificacoesAbertas(false);
+  };
+
   const totalDesafioP1 = desafioP1.reduce((a: number, b: number) => a + b, 0);
   const totalDesafioP2 = desafioP2.reduce((a: number, b: number) => a + b, 0);
   const totalDepositosP1 = contribuicoes.reduce((acc: number, curr: any) => acc + (Number(curr.p1Contr) || 0), 0);
@@ -49,23 +74,11 @@ export const HubScreen = ({
       else detalheDepositantes = `${parceiro1}: ${formatMoney(vP1)} | ${parceiro2}: ${formatMoney(vP2)}`;
 
       return {
-        id: c.id,
-        tipo: 'entrada',
-        titulo: 'Depósito no Cofre',
-        data: c.mesData || 'Mês Atual',
-        valor: vP1 + vP2,
-        detalhe: `${c.local ? `${c.local} • ` : ''}${detalheDepositantes}`,
-        timestamp: c.createdAt?.toMillis() || 0
+        id: c.id, tipo: 'entrada', titulo: 'Depósito no Cofre', data: c.mesData || 'Mês Atual', valor: vP1 + vP2, detalhe: `${c.local ? `${c.local} • ` : ''}${detalheDepositantes}`, timestamp: c.createdAt?.toMillis() || 0
       };
     }),
     ...despesasRapidas.map((d: any) => ({
-      id: d.id,
-      tipo: 'saida',
-      titulo: d.desc,
-      data: d.data,
-      valor: Number(d.valor || 0),
-      detalhe: `Pago por ${d.pagoPor}`,
-      timestamp: d.createdAt?.toMillis() || 0
+      id: d.id, tipo: 'saida', titulo: d.desc, data: d.data, valor: Number(d.valor || 0), detalhe: `Pago por ${d.pagoPor}`, timestamp: d.createdAt?.toMillis() || 0
     }))
   ].sort((a, b) => b.timestamp - a.timestamp);
 
@@ -86,9 +99,11 @@ export const HubScreen = ({
         mesData: dataFormatada, local: bancoSelecionado, p1Contr: v1, p2Contr: v2, createdAt: serverTimestamp()
       });
 
+      let metaNome = '';
       if (depMetaDestino) {
         const metaEscolhida = metas.find((m: any) => m.id === depMetaDestino);
         if (metaEscolhida) {
+          metaNome = metaEscolhida.titulo;
           const metaRef = doc(db, 'casais', casalId, 'metas', depMetaDestino);
           await updateDoc(metaRef, {
             atual: metaEscolhida.atual + valorNum,
@@ -96,6 +111,16 @@ export const HubScreen = ({
           });
         }
       }
+
+      // ✨ GERA A NOTIFICAÇÃO DO DEPÓSITO
+      await updateDoc(doc(db, 'casais', casalId), {
+        notificacoes: arrayUnion({
+          id: Date.now().toString(),
+          texto: `${meuNome} depositou ${formatMoney(valorNum)} no cofre${metaNome ? ` para a meta "${metaNome}"` : ''}! 💰`,
+          lida: false,
+          createdAt: new Date().toISOString()
+        })
+      });
 
       setNovoDepositoAberto(false); setValorDeposito(''); setDepMetaDestino('');
       setAlertMsg("Depósito salvo com sucesso! 🎉");
@@ -105,11 +130,7 @@ export const HubScreen = ({
 
   const alterarCor = async (cor: string) => {
     if (!casalId || !abrindoSeletor) return;
-    try {
-      const campoCor = abrindoSeletor === 'p1' ? 'corP1' : 'corP2';
-      await updateDoc(doc(db, 'casais', casalId), { [campoCor]: cor });
-      setAbrindoSeletor(null);
-    } catch (error) {}
+    try { await updateDoc(doc(db, 'casais', casalId), { [abrindoSeletor === 'p1' ? 'corP1' : 'corP2']: cor }); setAbrindoSeletor(null); } catch (error) {}
   };
 
   const abrirSeletorSeguro = (perfil: 'p1' | 'p2', nomePerfil: string) => {
@@ -123,10 +144,10 @@ export const HubScreen = ({
   };
 
   return (
-    <div className="hub-fintech-container animate-fade-in" style={{ paddingBottom: '40px' }}>
+    <div className="hub-fintech-container animate-fade-in">
       
-      {/* ✨ ALERTA PERSONALIZADO (Corrigido para não se perder na tela) */}
-      {alertMsg && (
+      {/* ALERTA E MODAIS GERAIS (Omitidos p/brevidade, idênticos aos de cima) */}
+      {alertMsg && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '32px 24px', maxWidth: '320px', width: '100%', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
             <div style={{ fontSize: '3.5rem', marginBottom: '16px' }}>{alertMsg.includes('sucesso') ? '✅' : '⚠️'}</div>
@@ -134,11 +155,10 @@ export const HubScreen = ({
             <p style={{ color: 'var(--text)', marginBottom: '24px', fontSize: '0.95rem' }}>{alertMsg}</p>
             <button onClick={() => setAlertMsg('')} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: minhaCor, color: '#fff', border: 'none', fontWeight: 'bold' }}>Entendi</button>
           </div>
-        </div>
+        </div>, document.body
       )}
 
-      {/* SELETOR DE CORES */}
-      {abrindoSeletor && (
+      {abrindoSeletor && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '32px 24px', borderRadius: '28px', width: '100%', maxWidth: '320px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
             <h3 style={{ margin: '0 0 24px 0', color: 'var(--text-h)' }}>Sua Cor de Perfil</h3>
@@ -149,17 +169,15 @@ export const HubScreen = ({
             </div>
             <button onClick={() => setAbrindoSeletor(null)} style={{ width: '100%', padding: '16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '16px', fontWeight: 'bold' }}>Cancelar</button>
           </div>
-        </div>
+        </div>, document.body
       )}
 
-      {/* ✨ MODAL DE NOVO DEPÓSITO (Corrigido para scroll interno) */}
-      {novoDepositoAberto && (
+      {novoDepositoAberto && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          {/* Scroll no Y habilitado caso a tela do celular seja pequena */}
-          <div className="animate-slide-up" style={{ background: 'var(--bg)', padding: '24px', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', paddingBottom: '40px' }}>
+          <div className="animate-slide-up" style={{ background: 'var(--bg)', padding: '24px', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '500px', maxHeight: '85vh', overflowY: 'auto', paddingBottom: '40px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Novo Depósito</h3>
-              <button onClick={() => setNovoDepositoAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text)', fontWeight: 'bold' }}>✕</button>
+              <button onClick={() => setNovoDepositoAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text)', fontWeight: 'bold', cursor: 'pointer' }}>✕</button>
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px' }}>
@@ -192,19 +210,50 @@ export const HubScreen = ({
               {isProcessando ? 'Salvando...' : 'Confirmar Depósito'}
             </button>
           </div>
-        </div>
+        </div>, document.body
       )}
 
-      {/* HEADER DO APP */}
-      <div style={{ marginBottom: '40px' }}>
-        <p style={{ margin: 0, color: 'var(--text)', fontSize: '0.9rem', fontWeight: 600 }}>Olá, {meuNome}</p>
-        <h2 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Resumo Conjunto</h2>
+      {/* ✨ MODAL DE NOTIFICAÇÕES */}
+      {notificacoesAbertas && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div className="animate-slide-up" style={{ background: 'var(--bg)', padding: '24px', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '500px', maxHeight: '85vh', overflowY: 'auto', paddingBottom: '40px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Atualizações 🔔</h3>
+              <button onClick={limparNotificacoes} style={{ background: 'var(--code-bg)', border: 'none', padding: '8px 12px', borderRadius: '12px', color: 'var(--text)', fontWeight: 'bold', cursor: 'pointer' }}>Marcar como Lidas</button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {notificacoes.length > 0 ? notificacoes.map((n: any) => (
+                <div key={n.id} style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '16px', border: `1px solid ${n.lida ? 'var(--border)' : minhaCor}`, opacity: n.lida ? 0.6 : 1 }}>
+                  <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.9rem', lineHeight: '1.4' }}>{n.texto}</p>
+                </div>
+              )) : (
+                <p style={{ textAlign: 'center', color: 'var(--text)', padding: '20px' }}>Nenhuma novidade por agora.</p>
+              )}
+            </div>
+          </div>
+        </div>, document.body
+      )}
+
+      {/* ✨ HEADER DO APP COM O SININHO */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
+        <div>
+          <p style={{ margin: 0, color: 'var(--text)', fontSize: '0.9rem', fontWeight: 600 }}>Olá, {meuNome}</p>
+          <h2 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Resumo Conjunto</h2>
+        </div>
+        
+        {/* BOTÃO DO SININHO DE NOTIFICAÇÃO */}
+        <button onClick={() => setNotificacoesAbertas(true)} style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', width: '44px', height: '44px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          {temNotificacaoNaoLida && (
+            <span style={{ position: 'absolute', top: '8px', right: '10px', width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', border: '2px solid var(--code-bg)' }}></span>
+          )}
+        </button>
       </div>
 
-      {/* CARTÃO DE SALDO CENTRAL COM AVATARES (NO TOPO) */}
+      {/* CARTÃO DE SALDO CENTRAL */}
       <div className="hub-balance-card" style={{ padding: '40px 24px 32px', background: 'var(--code-bg)', borderRadius: '28px', boxShadow: '0 8px 24px rgba(0,0,0,0.04)', marginBottom: '24px', position: 'relative' }}>
         
-        {/* AVATARES FLUTUANTES */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'absolute', top: '-28px', left: '0', right: '0' }}>
           <div onClick={() => abrirSeletorSeguro('p1', parceiro1)} style={{ width: '56px', height: '56px', borderRadius: '50%', border: `3px solid ${corP1}`, overflow: 'hidden', zIndex: 2, background: 'var(--bg)', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
             {renderAvatar(parceiro1, fotoP1, corP1)}
@@ -217,13 +266,11 @@ export const HubScreen = ({
         <span style={{ color: 'var(--text)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>Cofre do Casal</span>
         <h1 style={{ fontSize: '3rem', margin: '8px 0 24px 0', color: 'var(--text-h)', letterSpacing: '-1px' }}>{formatMoney(totalCofre)}</h1>
         
-        {/* BARRAS DE PORCENTAGEM */}
         <div style={{ width: '100%', height: '8px', background: 'var(--bg)', borderRadius: '10px', display: 'flex', overflow: 'hidden', marginBottom: '16px' }}>
           <div style={{ width: `${percP1}%`, background: corP1 }}></div>
           <div style={{ width: `${percP2}%`, background: corP2 }}></div>
         </div>
         
-        {/* ✨ NOVO: DETALHES DE PORCENTAGEM POR PARCEIRO */}
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.85rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-h)', fontWeight: 600 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: corP1 }}></span> {parceiro1}</span>
@@ -236,29 +283,17 @@ export const HubScreen = ({
         </div>
       </div>
 
-      {/* BOTÕES DE AÇÃO RÁPIDA */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
-        <button 
-          onClick={() => setNovoDepositoAberto(true)} 
-          style={{ padding: '16px', background: 'var(--code-bg)', border: 'none', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', color: 'var(--text-h)', fontWeight: 'bold' }}
-        >
-          <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          </div>
+        <button onClick={() => setNovoDepositoAberto(true)} style={{ padding: '16px', background: 'var(--code-bg)', border: 'none', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', color: 'var(--text-h)', fontWeight: 'bold' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
           Depositar
         </button>
-        <button 
-          onClick={() => setActiveView('lazer')} 
-          style={{ padding: '16px', background: 'var(--code-bg)', border: 'none', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', color: 'var(--text-h)', fontWeight: 'bold' }}
-        >
-          <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(236, 72, 153, 0.1)', color: '#ec4899', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path></svg>
-          </div>
+        <button onClick={() => setActiveView('lazer')} style={{ padding: '16px', background: 'var(--code-bg)', border: 'none', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', color: 'var(--text-h)', fontWeight: 'bold' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(236, 72, 153, 0.1)', color: '#ec4899', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path></svg></div>
           Ver Lazer
         </button>
       </div>
 
-      {/* ✨ VERSÍCULO E FRASE INSPIRACIONAL RESTAURADOS (Bem visíveis agora) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px' }}>
          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: 'var(--code-bg)', padding: '20px', borderRadius: '20px', border: '1px solid var(--border)' }}>
             <div style={{ color: 'var(--text)', opacity: 0.5 }}>📖</div>
@@ -273,13 +308,10 @@ export const HubScreen = ({
          </div>
       </div>
 
-      {/* LISTA DE TRANSAÇÕES */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>Movimentações</h3>
-          <button onClick={() => setMostrarExtratoCompleto(!mostrarExtratoCompleto)} style={{ background: 'none', border: 'none', color: minhaCor, fontWeight: 'bold', fontSize: '0.9rem' }}>
-            {mostrarExtratoCompleto ? 'Ocultar' : 'Ver tudo'}
-          </button>
+          <button onClick={() => setMostrarExtratoCompleto(!mostrarExtratoCompleto)} style={{ background: 'none', border: 'none', color: minhaCor, fontWeight: 'bold', fontSize: '0.9rem' }}>{mostrarExtratoCompleto ? 'Ocultar' : 'Ver tudo'}</button>
         </div>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -300,6 +332,8 @@ export const HubScreen = ({
           {extratoUnificado.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text)', padding: '20px', fontSize: '0.9rem' }}>O cofre está limpo por enquanto.</p>}
         </div>
       </div>
+      
+      <div className="scroll-spacer"></div>
     </div>
   );
 };

@@ -76,62 +76,13 @@ export const Desafio200Screen = ({
   };
 
   return (
-    <div className="hub-fintech-container animate-fade-in">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <button className="btn-voltar" onClick={() => setActiveView('hub')} style={{ margin: 0 }}>
-          {icons.voltar} Voltar
-        </button>
-        <div style={{ textAlign: 'right' }}>
-          <h2 style={{ color: 'var(--text-h)', margin: 0, fontSize: '1.2rem' }}>Acelerador</h2>
-        </div>
-      </div>
-
-      {/* PAINEL DO PARCEIRO (COMPETIÇÃO) */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--code-bg)', borderRadius: '12px', marginBottom: '24px', border: '1px solid var(--border)', alignItems: 'center' }}>
-        <span style={{ color: 'var(--text)', fontSize: '0.85rem', fontWeight: 600, textTransform: 'uppercase' }}>Progresso de {nomeParceiro}</span>
-        <span style={{ color: corParceiro, fontWeight: 'bold', fontSize: '1.1rem' }}>{formatMoney(listaParceiro.reduce((a:number,b:number)=>a+b,0))}</span>
-      </div>
-
-      {/* SEU PAINEL PRINCIPAL */}
-      <div className="hub-balance-card" style={{ padding: '24px', background: 'var(--bg)', marginBottom: '32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-          <div style={{ textAlign: 'left' }}>
-            <span style={{ color: 'var(--text)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 'bold' }}>Seu Guardado ({meuNome})</span>
-            <h2 style={{ color: minhaCor, margin: '4px 0 0 0', fontSize: '2rem' }}>{formatMoney(totalAcumulado)}</h2>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <span style={{ color: 'var(--text)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 'bold' }}>Progresso</span>
-            <h3 style={{ color: 'var(--text-h)', margin: '4px 0 0 0', fontSize: '1.5rem' }}>{progresso}%</h3>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(48px, 1fr))', gap: '8px', maxHeight: '400px', overflowY: 'auto', paddingRight: '8px', opacity: isProcessando ? 0.5 : 1, pointerEvents: isProcessando ? 'none' : 'auto' }}>
-        {numeros.map(n => {
-          const marcado = listaChecks.includes(n);
-          return (
-            <div 
-              key={n}
-              onClick={() => handleCliqueQuadrado(n)}
-              style={{
-                aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s', border: '1px solid var(--border)',
-                background: marcado ? minhaCor : 'var(--code-bg)',
-                color: marcado ? '#fff' : 'var(--text)',
-                boxShadow: marcado ? 'inset 0 2px 4px rgba(0,0,0,0.2)' : 'none'
-              }}
-            >
-              {marcado ? (icons.checkBold || '✓') : n}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* MODAL DE DESTINO DO DINHEIRO */}
+    <>
+      {/* ✨ MODAL DE DESTINO DO DINHEIRO (Solto no topo do DOM) */}
       {valorSelecionado && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-          <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderTopLeftRadius: '30px', borderTopRightRadius: '30px', padding: '30px 24px 50px', textAlign: 'center' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 99999, backdropFilter: 'blur(4px)' }}>
+          <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderTopLeftRadius: '32px', borderTopRightRadius: '32px', padding: '32px 24px 60px', textAlign: 'center', maxHeight: '85vh', overflowY: 'auto' }}>
             
-            <div style={{ width: 64, height: 64, background: 'var(--code-bg)', color: minhaCor, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: `2px solid ${minhaCor}` }}>
+            <div style={{ width: 64, height: 64, background: 'var(--code-bg)', color: minhaCor, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: `2px solid ${minhaCor}`, boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
               {icons.trophy || '🏆'}
             </div>
             
@@ -144,10 +95,10 @@ export const Desafio200Screen = ({
                   key={m.id}
                   onClick={() => confirmarDeposito(m.id)}
                   disabled={isProcessando}
-                  style={{ padding: '18px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '16px', color: 'var(--text-h)', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  style={{ padding: '20px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '16px', color: 'var(--text-h)', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}
                 >
                   {m.titulo} 
-                  <span style={{ color: minhaCor, fontSize: '0.85rem' }}>Confirmar</span>
+                  <span style={{ color: minhaCor, fontSize: '0.9rem' }}>Confirmar</span>
                 </button>
               ))}
               
@@ -166,6 +117,56 @@ export const Desafio200Screen = ({
           </div>
         </div>
       )}
-    </div>
+
+      <div className="hub-fintech-container animate-fade-in">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <h2 style={{ color: 'var(--text-h)', margin: 0, fontSize: '1.4rem' }}>Acelerador</h2>
+        </div>
+
+        {/* PAINEL DO PARCEIRO (COMPETIÇÃO) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', background: 'var(--code-bg)', borderRadius: '16px', marginBottom: '24px', border: '1px solid var(--border)', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
+          <span style={{ color: 'var(--text)', fontSize: '0.85rem', fontWeight: 600, textTransform: 'uppercase' }}>Progresso de {nomeParceiro}</span>
+          <span style={{ color: corParceiro, fontWeight: 'bold', fontSize: '1.1rem' }}>{formatMoney(listaParceiro.reduce((a:number,b:number)=>a+b,0))}</span>
+        </div>
+
+        {/* SEU PAINEL PRINCIPAL */}
+        <div className="hub-balance-card" style={{ padding: '32px 24px', background: 'var(--code-bg)', marginBottom: '32px', borderRadius: '28px', boxShadow: '0 8px 24px rgba(0,0,0,0.04)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+            <div style={{ textAlign: 'left' }}>
+              <span style={{ color: 'var(--text)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 'bold' }}>Seu Guardado ({meuNome})</span>
+              <h2 style={{ color: minhaCor, margin: '4px 0 0 0', fontSize: '2.2rem', letterSpacing: '-1px' }}>{formatMoney(totalAcumulado)}</h2>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ color: 'var(--text)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 'bold' }}>Progresso</span>
+              <h3 style={{ color: 'var(--text-h)', margin: '4px 0 0 0', fontSize: '1.8rem' }}>{progresso}%</h3>
+            </div>
+          </div>
+        </div>
+
+        {/* ✨ A GRADE: CSS de maxHeight e overflowY foram removidos para rolar a tela toda */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(48px, 1fr))', gap: '10px', opacity: isProcessando ? 0.5 : 1, pointerEvents: isProcessando ? 'none' : 'auto' }}>
+          {numeros.map(n => {
+            const marcado = listaChecks.includes(n);
+            return (
+              <div 
+                key={n}
+                onClick={() => handleCliqueQuadrado(n)}
+                style={{
+                  aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s', border: '1px solid var(--border)',
+                  background: marcado ? minhaCor : 'var(--code-bg)',
+                  color: marcado ? '#fff' : 'var(--text)',
+                  boxShadow: marcado ? 'inset 0 2px 4px rgba(0,0,0,0.2)' : '0 2px 6px rgba(0,0,0,0.02)'
+                }}
+              >
+                {marcado ? (icons.checkBold || '✓') : n}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ✨ ESPAÇADOR FÍSICO (Para o menu inferior não engolir os números 194-200) */}
+        <div className="scroll-spacer"></div>
+      </div>
+    </>
   );
 };
