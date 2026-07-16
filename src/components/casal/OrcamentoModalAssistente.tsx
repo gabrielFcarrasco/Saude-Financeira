@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { enviarMensagemParaGemini } from '../../services/gemini';
-// ✨ IMPORTANDO OS ÍCONES DA LUCIDE-REACT
-import { Bot, X, ChevronRight, Send } from 'lucide-react';
+
+// ✨ O SEGREDO INFALÍVEL: Ícones convertidos em Imagens puras (Imunes a bloqueios de CSS)
+const ICON_BOT = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='11' width='18' height='10' rx='2'/%3E%3Ccircle cx='12' cy='5' r='2'/%3E%3Cpath d='M12 7v4'/%3E%3Cline x1='8' y1='16' x2='8' y2='16'/%3E%3Cline x1='16' y1='16' x2='16' y2='16'/%3E%3C/svg%3E";
+const ICON_SEND = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='22' y1='2' x2='11' y2='13'/%3E%3Cpolygon points='22 2 15 22 11 13 2 9 22 2'/%3E%3C/svg%3E";
 
 export const OrcamentoModalAssistente = ({
   assistenteAberto, setAssistenteAberto, casalId, 
@@ -15,19 +17,20 @@ export const OrcamentoModalAssistente = ({
   const [respostaIA, setRespostaIA] = useState('');
   const [isPensando, setIsPensando] = useState(false);
   
-  // Estados para a animação de texto
+  // Estado para a animação de texto (agora super limpo)
   const [etapaIA, setEtapaIA] = useState('');
-  const [pontinhos, setPontinhos] = useState('');
   
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Auto-scroll
   useEffect(() => {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
-  }, [perguntaFeita, respostaIA, isPensando, pontinhos]);
+  }, [perguntaFeita, respostaIA, isPensando, etapaIA]);
 
+  // Limpa o chat ao fechar
   useEffect(() => {
     if (!assistenteAberto) {
       setInputTexto('');
@@ -37,32 +40,22 @@ export const OrcamentoModalAssistente = ({
     }
   }, [assistenteAberto]);
 
-  // Lógica da animação de estágios (Pensando -> Analisando -> Digitando)
+  // Lógica da animação Limpa (Pensando -> Analisando -> Digitando)
   useEffect(() => {
     let timer1: NodeJS.Timeout;
     let timer2: NodeJS.Timeout;
-    let intervalPontos: NodeJS.Timeout;
 
     if (isPensando) {
-      setEtapaIA('Pensando');
-      
-      // Anima os 3 pontinhos (...)
-      intervalPontos = setInterval(() => {
-        setPontinhos(prev => prev.length >= 3 ? '' : prev + '.');
-      }, 400);
-
-      // Troca os textos com o passar dos segundos
-      timer1 = setTimeout(() => setEtapaIA('Analisando as categorias'), 1500);
-      timer2 = setTimeout(() => setEtapaIA('Digitando'), 3500);
+      setEtapaIA('Pensando...');
+      timer1 = setTimeout(() => setEtapaIA('Analisando as categorias...'), 1500);
+      timer2 = setTimeout(() => setEtapaIA('Digitando...'), 3500);
     } else {
       setEtapaIA('');
-      setPontinhos('');
     }
 
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
-      clearInterval(intervalPontos);
     };
   }, [isPensando]);
 
@@ -137,22 +130,22 @@ export const OrcamentoModalAssistente = ({
         
         <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px', flexShrink: 0 }}></div>
         
-        {/* TOPO: AGORA COM LUCIDE-REACT */}
+        {/* TOPO: TÍTULO E BOTÃO DE FECHAR */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0, paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
           <h3 style={{ margin: 0, color: 'var(--text-h)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.1rem' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {/* ÍCONE DO BOT */}
-              <Bot size={20} color="#ffffff" strokeWidth={2.5} />
+              {/* O Ícone do Robozinho blindado contra CSS */}
+              <img src={ICON_BOT} alt="Bot" style={{ width: '18px', height: '18px' }} />
             </div>
             Assistente
           </h3>
           
           <button 
             onClick={() => setAssistenteAberto(false)} 
-            style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', padding: 0 }}
+            style={{ background: 'var(--bg)', border: '1px solid var(--border)', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', fontSize: '1.1rem', fontWeight: 'bold', fontFamily: 'sans-serif', padding: 0 }}
           >
-            {/* ÍCONE DE FECHAR (X) */}
-            <X size={18} color="currentColor" strokeWidth={2.5} />
+            {/* O "X" puro, sem SVGs */}
+            X
           </button>
         </div>
 
@@ -173,8 +166,8 @@ export const OrcamentoModalAssistente = ({
               {sugestoesRapidas.map((sug, i) => (
                 <button key={i} onClick={() => fazerPergunta(sug)} style={{ background: 'transparent', border: '1px solid var(--accent)', padding: '14px 16px', borderRadius: '16px', color: 'var(--accent)', fontWeight: '600', fontSize: '0.9rem', textAlign: 'left', cursor: 'pointer', transition: '0.2s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   {sug} 
-                  {/* ÍCONE DE SETA */}
-                  <ChevronRight size={18} />
+                  {/* Setinha usando caractere universal de texto */}
+                  <span style={{ fontSize: '1.3rem', paddingBottom: '2px', lineHeight: 0 }}>›</span>
                 </button>
               ))}
             </div>
@@ -187,12 +180,12 @@ export const OrcamentoModalAssistente = ({
             </div>
           )}
 
-          {/* LOADING OU RESPOSTA DA IA */}
+          {/* TEXTO DE LOADING LIMPO OU RESPOSTA DA IA */}
           {(isPensando || respostaIA) && (
             <div className="animate-fade-in" style={{ alignSelf: 'flex-start', background: 'var(--code-bg)', border: '1px solid var(--border)', padding: '16px 20px', borderRadius: '0 20px 20px 20px', maxWidth: '90%', marginTop: '4px' }}>
               {isPensando ? (
-                <div style={{ display: 'flex', alignItems: 'center', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                  <span style={{ fontStyle: 'italic' }}>{etapaIA}{pontinhos}</span>
+                <div style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.9rem', fontStyle: 'italic' }}>
+                  {etapaIA}
                 </div>
               ) : (
                 <div style={{ color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
@@ -217,10 +210,10 @@ export const OrcamentoModalAssistente = ({
           <button 
             onClick={() => fazerPergunta(inputTexto)}
             disabled={!inputTexto.trim() || isPensando}
-            style={{ background: 'var(--accent)', border: 'none', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: (!inputTexto.trim() || isPensando) ? 0.5 : 1, transition: '0.2s', marginBottom: '2px', flexShrink: 0 }}
+            style={{ background: 'var(--accent)', border: 'none', width: '40px', height: '40px', borderRadius: '50%', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: (!inputTexto.trim() || isPensando) ? 0.5 : 1, transition: '0.2s', marginBottom: '2px', flexShrink: 0 }}
           >
-            {/* ÍCONE DE ENVIAR (AVIÃOZINHO DO LUCIDE) */}
-            <Send size={18} color="#ffffff" strokeWidth={2.5} style={{ transform: 'translate(-1px, 1px)' }} />
+            {/* O Avião Mágico: Imune a resets de CSS */}
+            <img src={ICON_SEND} alt="Enviar" style={{ width: '18px', height: '18px', transform: 'translateX(-1px)' }} />
           </button>
         </div>
 
