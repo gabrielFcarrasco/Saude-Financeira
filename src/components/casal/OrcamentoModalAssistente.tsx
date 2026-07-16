@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { enviarMensagemParaGemini } from '../../services/gemini';
+// ✨ IMPORTANDO OS ÍCONES DA LUCIDE-REACT
+import { Bot, X, ChevronRight, Send } from 'lucide-react';
 
 export const OrcamentoModalAssistente = ({
   assistenteAberto, setAssistenteAberto, casalId, 
@@ -135,25 +137,22 @@ export const OrcamentoModalAssistente = ({
         
         <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px', flexShrink: 0 }}></div>
         
-        {/* TOPO */}
+        {/* TOPO: AGORA COM LUCIDE-REACT */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0, paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
           <h3 style={{ margin: 0, color: 'var(--text-h)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.1rem' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">
-                {/* Convertido para <path> à prova de resets CSS */}
-                <path d="M3 11h18M12 5v6M8 16h8" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M12 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M19.5 6.5l-12 12M4.5 6.5l12 12" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity: 0}} />
-              </svg>
+              {/* ÍCONE DO BOT */}
+              <Bot size={20} color="#ffffff" strokeWidth={2.5} />
             </div>
             Assistente
           </h3>
           
           <button 
             onClick={() => setAssistenteAberto(false)} 
-            style={{ background: 'var(--bg)', border: '1px solid var(--border)', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', fontSize: '1.2rem', fontFamily: 'sans-serif', padding: 0 }}
+            style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', padding: 0 }}
           >
-            ✕
+            {/* ÍCONE DE FECHAR (X) */}
+            <X size={18} color="currentColor" strokeWidth={2.5} />
           </button>
         </div>
 
@@ -174,9 +173,8 @@ export const OrcamentoModalAssistente = ({
               {sugestoesRapidas.map((sug, i) => (
                 <button key={i} onClick={() => fazerPergunta(sug)} style={{ background: 'transparent', border: '1px solid var(--accent)', padding: '14px 16px', borderRadius: '16px', color: 'var(--accent)', fontWeight: '600', fontSize: '0.9rem', textAlign: 'left', cursor: 'pointer', transition: '0.2s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   {sug} 
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  {/* ÍCONE DE SETA */}
+                  <ChevronRight size={18} />
                 </button>
               ))}
             </div>
@@ -194,7 +192,6 @@ export const OrcamentoModalAssistente = ({
             <div className="animate-fade-in" style={{ alignSelf: 'flex-start', background: 'var(--code-bg)', border: '1px solid var(--border)', padding: '16px 20px', borderRadius: '0 20px 20px 20px', maxWidth: '90%', marginTop: '4px' }}>
               {isPensando ? (
                 <div style={{ display: 'flex', alignItems: 'center', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                  {/* Removidas as bolinhas circulares daqui. Agora é só o texto com pontos animados! */}
                   <span style={{ fontStyle: 'italic' }}>{etapaIA}{pontinhos}</span>
                 </div>
               ) : (
@@ -220,13 +217,10 @@ export const OrcamentoModalAssistente = ({
           <button 
             onClick={() => fazerPergunta(inputTexto)}
             disabled={!inputTexto.trim() || isPensando}
-            style={{ background: 'var(--accent)', border: 'none', width: '40px', height: '40px', borderRadius: '50%', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: (!inputTexto.trim() || isPensando) ? 0.5 : 1, transition: '0.2s', marginBottom: '2px', flexShrink: 0 }}
+            style={{ background: 'var(--accent)', border: 'none', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: (!inputTexto.trim() || isPensando) ? 0.5 : 1, transition: '0.2s', marginBottom: '2px', flexShrink: 0 }}
           >
-            {/* O Avião Mágico: Escrito TODO em <path> e com cor injetada direto nele! */}
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ transform: 'translate(-1px, 1px)' }}>
-              <path d="M22 2L11 13" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M22 2l-7 20-4-9-9-4 20-7z" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            {/* ÍCONE DE ENVIAR (AVIÃOZINHO DO LUCIDE) */}
+            <Send size={18} color="#ffffff" strokeWidth={2.5} style={{ transform: 'translate(-1px, 1px)' }} />
           </button>
         </div>
 
