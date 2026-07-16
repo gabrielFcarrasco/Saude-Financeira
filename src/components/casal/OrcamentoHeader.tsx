@@ -3,7 +3,8 @@ import React from 'react';
 export const OrcamentoHeader = ({
   limiteMensalLazer, setEditandoLimite, restanteLazer, porcentagemUso,
   gastoP1, gastoP2, parceiro1, parceiro2, corP1, corP2, formatMoney, dicaRapida,
-  caixinhasValidas, gastosPorCaixinha, setEditandoCaixinhas
+  caixinhasValidas, gastosPorCaixinha, setEditandoCaixinhas,
+  setAssistenteAberto
 }: any) => {
   return (
     <>
@@ -14,7 +15,7 @@ export const OrcamentoHeader = ({
             <h2 style={{ margin: '4px 0', color: 'var(--text-h)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.8rem' }}>
               {formatMoney(limiteMensalLazer)}
               <button onClick={() => setEditandoLimite(true)} style={{ background: 'var(--bg)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                ✎
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
               </button>
             </h2>
           </div>
@@ -34,16 +35,38 @@ export const OrcamentoHeader = ({
         </div>
       </div>
 
-      <div style={{ background: 'rgba(138, 43, 226, 0.05)', padding: '16px', borderRadius: '20px', border: '1px solid rgba(138, 43, 226, 0.1)', marginBottom: '32px' }}>
-        <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.9rem', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '1.2rem' }}>💡</span> {dicaRapida}
-        </p>
+      {/* ✨ CAIXA DO ASSISTENTE (Visual mais intuitivo e didático) */}
+      <div style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', marginBottom: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(138, 43, 226, 0.3)' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg>
+          </div>
+          <div>
+             <h4 style={{ margin: '0 0 4px 0', color: 'var(--text-h)', fontSize: '1.05rem' }}>Assistente Inteligente</h4>
+             <p style={{ margin: 0, color: 'var(--text)', fontSize: '0.85rem' }}>Dica de lazer de hoje:</p>
+          </div>
+        </div>
+        
+        {/* Balão apenas com texto, sem emojis */}
+        <div style={{ background: 'var(--bg)', padding: '16px', borderRadius: '16px', marginBottom: '16px', border: '1px solid var(--border)' }}>
+           <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.95rem', fontStyle: 'italic', lineHeight: '1.4' }}>
+             "{dicaRapida}"
+           </p>
+        </div>
+
+        {/* Botão claro e direto */}
+        <button 
+          onClick={() => setAssistenteAberto(true)}
+          style={{ width: '100%', background: 'var(--accent)', color: '#fff', padding: '16px', borderRadius: '16px', border: 'none', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          Conversar com o Assistente
+        </button>
       </div>
 
-      {/* ✨ AS BARRAS DAS CAIXINHAS INDIVIDUAIS */}
       <div style={{ marginBottom: '32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>Nossas Caixinhas</h3>
+          <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>Nossas Categorias</h3>
           <button onClick={() => setEditandoCaixinhas(true)} style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '12px', padding: '6px 12px', fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)', cursor: 'pointer' }}>Gerenciar</button>
         </div>
         

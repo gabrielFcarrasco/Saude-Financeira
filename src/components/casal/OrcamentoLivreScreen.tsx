@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, addDoc, collection, serverTimestamp, deleteDoc, query, getDocs, onSnapshot, arrayUnion } from 'firebase/firestore'; // ✨ arrayUnion importado
+import { doc, updateDoc, addDoc, collection, serverTimestamp, deleteDoc, query, getDocs, onSnapshot, arrayUnion } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { enviarMensagemParaGemini } from '../../services/gemini';
 
@@ -11,6 +11,7 @@ import { OrcamentoModalConclusao } from './OrcamentoModalConclusao';
 import { OrcamentoModalSalarios } from './OrcamentoModalSalarios';
 import { OrcamentoModalCaixinhas } from './OrcamentoModalCaixinhas';
 import { OrcamentoModalAgenda } from './OrcamentoModalAgenda';
+import { OrcamentoModalAssistente } from './OrcamentoModalAssistente'; // ✨ NOVO IMPORT
 
 export const OrcamentoLivreScreen = ({ 
   setActiveView, casalId, saidas, limiteMensalLazer, parceiro1, parceiro2, corP1, corP2, formatMoney, icons, currentUserRole, meuNome
@@ -18,6 +19,7 @@ export const OrcamentoLivreScreen = ({
   
   const [isProcessando, setIsProcessando] = useState(false);
   const [dicaRapida, setDicaRapida] = useState('Analisando o clima financeiro...');
+  const [dicaDataFirebase, setDicaDataFirebase] = useState(''); // ✨ Estado da Data da Dica
   
   const [caixinhas, setCaixinhas] = useState<any[]>([]);
   const [editandoCaixinhas, setEditandoCaixinhas] = useState(false);
@@ -27,6 +29,9 @@ export const OrcamentoLivreScreen = ({
   const [agendaP1, setAgendaP1] = useState<string[]>([]);
   const [agendaP2, setAgendaP2] = useState<string[]>([]);
 
+  // ✨ ESTADO DO ASSISTENTE IA
+  const [assistenteAberto, setAssistenteAberto] = useState(false);
+
   const [simuladorAberto, setSimuladorAberto] = useState(false);
   const [idEdicao, setIdEdicao] = useState<string | null>(null);
   const [simTitulo, setSimTitulo] = useState('');
@@ -34,7 +39,6 @@ export const OrcamentoLivreScreen = ({
   const [simItems, setSimItems] = useState([{ id: 1, nome: '', valor: '', responsavel: 'ambos' }]);
   const [saidaExpandida, setSaidaExpandida] = useState<string | null>(null);
   const [editandoLimite, setEditandoLimite] = useState(false);
-  const [novoLimiteInput, setNovoLimiteInput] = useState(limiteMensalLazer.toString());
   
   const [modalConcluir, setModalConcluir] = useState<any | null>(null);
   const [passoConclusao, setPassoConclusao] = useState<'pergunta' | 'ajuste' | 'sobra'>('pergunta');
@@ -44,6 +48,7 @@ export const OrcamentoLivreScreen = ({
   const [valorP2Real, setValorP2Real] = useState('');
   const [sobraDetectada, setSobraDetectada] = useState(0);
 
+  // ✨ ESCUTA ATIVA DOS DADOS DO CASAL (Incluindo a Dica Salva)
   useEffect(() => {
     if (!casalId) return;
     const unsub = onSnapshot(doc(db, 'casais', casalId), (docSnap) => {
@@ -52,6 +57,10 @@ export const OrcamentoLivreScreen = ({
         if (data.caixinhas) setCaixinhas(data.caixinhas);
         if (data.agendaP1) setAgendaP1(data.agendaP1);
         if (data.agendaP2) setAgendaP2(data.agendaP2);
+        
+        // Puxa a dica salva para não gerar de novo atoa!
+        if (data.dicaLazerData) setDicaDataFirebase(data.dicaLazerData);
+        if (data.dicaLazerTexto) setDicaRapida(data.dicaLazerTexto);
       }
     });
     return () => unsub();
@@ -63,6 +72,7 @@ export const OrcamentoLivreScreen = ({
   const mesAtualNum = hoje.getMonth();
   const anoAtualNum = hoje.getFullYear();
   const diasParaRenovar = new Date(anoAtualNum, mesAtualNum + 1, 0).getDate() - hoje.getDate() + 1;
+  const dataHojeStr = hoje.toISOString().split('T')[0];
 
   const saidasMesAtual: any[] = [];
   const saidasHistorico: any[] = [];
@@ -78,7 +88,7 @@ export const OrcamentoLivreScreen = ({
   });
 
   let gastoP1 = 0; let gastoP2 = 0;
-  let gastosPorCaixinha: Record<string, number> = {};
+  const gastosPorCaixinha: Record<string, number> = {};
   caixinhasValidas.forEach((c: any) => gastosPorCaixinha[c.id] = 0);
 
   saidasMesAtual.forEach((s: any) => {
@@ -108,20 +118,42 @@ export const OrcamentoLivreScreen = ({
   const porcentagemUso = Math.min((gastoEPlanejado / limiteMensalLazer) * 100, 100);
   const totalSimulacao = simItems.reduce((acc: number, curr: any) => acc + Number(curr.valor || 0), 0);
 
+  // ✨ TRAVA DA DICA DIÁRIA
   useEffect(() => {
     let isMounted = true;
-    const buscarDicaRapida = async () => {
+    const gerenciarDicaDiaria = async () => {
       if (!casalId) return;
+      
+      // Se a data de hoje já for a data que está no firebase, não faz nada!
+      if (dicaDataFirebase === dataHojeStr) return;
+
       try {
-        const ctx = `Limite: ${limiteMensalLazer}. Gastos: ${gastoEPlanejado}. Sobra: ${restanteLazer}. Dias: ${diasParaRenovar}.`;
-        const pg = `Dê 1 dica rápida de 1 linha sobre como aproveitar esse orçamento. Sem emojis.`;
+        const ctx = `Limite mensal do casal: R$ ${limiteMensalLazer}. Já planearam/gastaram: R$ ${gastoEPlanejado}. Faltam ${diasParaRenovar} dias para virar o mês.`;
+        const pg = `Dê 1 dica financeira amigável ou sugestão de lazer de 1 linha sobre como aproveitar esse orçamento de acordo com a sobra. Seja romântico e inspirador. Sem usar emojis na resposta.`;
+        
         const resposta = await enviarMensagemParaGemini(pg, ctx);
-        if (isMounted && resposta) setDicaRapida(resposta.replace(/^"|"$/g, ''));
+        const textoLimpo = resposta.replace(/^"|"$/g, '');
+        
+        if (isMounted && textoLimpo) {
+          // Salva no banco de dados para travar no dia de hoje
+          await updateDoc(doc(db, 'casais', casalId), {
+            dicaLazerData: dataHojeStr,
+            dicaLazerTexto: textoLimpo
+          });
+        }
       } catch (e) { }
     };
-    buscarDicaRapida();
+    
+    // Só tenta gerar se a data carregada do Firebase não for a de hoje.
+    if (dicaDataFirebase !== '' && dicaDataFirebase !== dataHojeStr) {
+      gerenciarDicaDiaria();
+    } else if (dicaDataFirebase === '') {
+      // Primeira vez abrindo no dia
+      gerenciarDicaDiaria();
+    }
+
     return () => { isMounted = false; };
-  }, [casalId, limiteMensalLazer, gastoEPlanejado, diasParaRenovar]); 
+  }, [casalId, limiteMensalLazer, gastoEPlanejado, diasParaRenovar, dicaDataFirebase, dataHojeStr]); 
 
   const abrirNovoPlano = () => {
     setIdEdicao(null); setSimTitulo(''); setSimData('');
@@ -130,7 +162,6 @@ export const OrcamentoLivreScreen = ({
     setSimuladorAberto(true);
   };
 
-  // ✨ NOVA FUNÇÃO: Abre o planner já com a data que veio do Calendário!
   const abrirNovoPlanoComData = (dataStr: string) => {
     setIdEdicao(null); setSimTitulo(''); 
     setSimData(dataStr); 
@@ -161,7 +192,6 @@ export const OrcamentoLivreScreen = ({
         await updateDoc(doc(db, 'casais', casalId, 'saidas', idEdicao), dados);
       } else {
         await addDoc(collection(db, 'casais', casalId, 'saidas'), { ...dados, createdAt: serverTimestamp() });
-        // ✨ GERA UMA NOTIFICAÇÃO PARA O PARCEIRO AVISANDO DO PASSEIO!
         await updateDoc(doc(db, 'casais', casalId), {
           notificacoes: arrayUnion({
             id: Date.now().toString(),
@@ -252,6 +282,7 @@ export const OrcamentoLivreScreen = ({
         restanteLazer={restanteLazer} porcentagemUso={porcentagemUso}
         gastoP1={gastoP1} gastoP2={gastoP2} parceiro1={parceiro1} parceiro2={parceiro2} corP1={corP1} corP2={corP2} formatMoney={formatMoney} dicaRapida={dicaRapida}
         caixinhasValidas={caixinhasValidas} gastosPorCaixinha={gastosPorCaixinha} setEditandoCaixinhas={setEditandoCaixinhas}
+        setAssistenteAberto={setAssistenteAberto} // ✨ Passando a função para o botão!
       />
 
       {!simuladorAberto && (
@@ -298,12 +329,20 @@ export const OrcamentoLivreScreen = ({
         caixinhasValidas={caixinhasValidas} limiteMensalLazer={limiteMensalLazer} formatMoney={formatMoney}
       />
 
-      {/* ✨ O NOVO MODAL DO CALENDÁRIO COM A NOVA FUNÇÃO DE AGENDAR */}
       <OrcamentoModalAgenda
         agendaAberto={agendaAberto} setAgendaAberto={setAgendaAberto} casalId={casalId}
         agendaP1={agendaP1} agendaP2={agendaP2} currentUserRole={currentUserRole}
         parceiro1={parceiro1} parceiro2={parceiro2} corP1={corP1} corP2={corP2} meuNome={meuNome}
         abrirNovoPlanoComData={abrirNovoPlanoComData}
+      />
+
+      {/* ✨ MODAL DO ASSISTENTE INTELIGENTE! */}
+      <OrcamentoModalAssistente
+        assistenteAberto={assistenteAberto} setAssistenteAberto={setAssistenteAberto}
+        casalId={casalId} parceiro1={parceiro1} parceiro2={parceiro2}
+        limiteMensalLazer={limiteMensalLazer} gastoEPlanejado={gastoEPlanejado}
+        caixinhasValidas={caixinhasValidas} gastosPorCaixinha={gastosPorCaixinha}
+        saidasMesAtual={saidasMesAtual} formatMoney={formatMoney}
       />
 
       <div className="scroll-spacer"></div>
