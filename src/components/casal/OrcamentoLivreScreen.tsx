@@ -3,7 +3,6 @@ import { doc, updateDoc, addDoc, collection, serverTimestamp, deleteDoc, query, 
 import { db } from '../../services/firebase';
 import { enviarMensagemParaGemini } from '../../services/gemini';
 
-// IMPORT DOS NOSSOS MÓDULOS DE COMPONENTES
 import { OrcamentoHeader } from './OrcamentoHeader';
 import { OrcamentoListas } from './OrcamentoListas';
 import { OrcamentoModalPlanner } from './OrcamentoModalPlanner';
@@ -11,7 +10,7 @@ import { OrcamentoModalConclusao } from './OrcamentoModalConclusao';
 import { OrcamentoModalSalarios } from './OrcamentoModalSalarios';
 import { OrcamentoModalCaixinhas } from './OrcamentoModalCaixinhas';
 import { OrcamentoModalAgenda } from './OrcamentoModalAgenda';
-import { OrcamentoModalAssistente } from './OrcamentoModalAssistente'; // ✨ NOVO IMPORT
+import { OrcamentoModalAssistente } from './OrcamentoModalAssistente'; 
 
 export const OrcamentoLivreScreen = ({ 
   setActiveView, casalId, saidas, limiteMensalLazer, parceiro1, parceiro2, corP1, corP2, formatMoney, icons, currentUserRole, meuNome
@@ -19,7 +18,7 @@ export const OrcamentoLivreScreen = ({
   
   const [isProcessando, setIsProcessando] = useState(false);
   const [dicaRapida, setDicaRapida] = useState('Analisando o clima financeiro...');
-  const [dicaDataFirebase, setDicaDataFirebase] = useState(''); // ✨ Estado da Data da Dica
+  const [dicaDataFirebase, setDicaDataFirebase] = useState('');
   
   const [caixinhas, setCaixinhas] = useState<any[]>([]);
   const [editandoCaixinhas, setEditandoCaixinhas] = useState(false);
@@ -29,7 +28,6 @@ export const OrcamentoLivreScreen = ({
   const [agendaP1, setAgendaP1] = useState<string[]>([]);
   const [agendaP2, setAgendaP2] = useState<string[]>([]);
 
-  // ✨ ESTADO DO ASSISTENTE IA
   const [assistenteAberto, setAssistenteAberto] = useState(false);
 
   const [simuladorAberto, setSimuladorAberto] = useState(false);
@@ -48,7 +46,6 @@ export const OrcamentoLivreScreen = ({
   const [valorP2Real, setValorP2Real] = useState('');
   const [sobraDetectada, setSobraDetectada] = useState(0);
 
-  // ✨ ESCUTA ATIVA DOS DADOS DO CASAL (Incluindo a Dica Salva)
   useEffect(() => {
     if (!casalId) return;
     const unsub = onSnapshot(doc(db, 'casais', casalId), (docSnap) => {
@@ -57,8 +54,6 @@ export const OrcamentoLivreScreen = ({
         if (data.caixinhas) setCaixinhas(data.caixinhas);
         if (data.agendaP1) setAgendaP1(data.agendaP1);
         if (data.agendaP2) setAgendaP2(data.agendaP2);
-        
-        // Puxa a dica salva para não gerar de novo atoa!
         if (data.dicaLazerData) setDicaDataFirebase(data.dicaLazerData);
         if (data.dicaLazerTexto) setDicaRapida(data.dicaLazerTexto);
       }
@@ -118,13 +113,10 @@ export const OrcamentoLivreScreen = ({
   const porcentagemUso = Math.min((gastoEPlanejado / limiteMensalLazer) * 100, 100);
   const totalSimulacao = simItems.reduce((acc: number, curr: any) => acc + Number(curr.valor || 0), 0);
 
-  // ✨ TRAVA DA DICA DIÁRIA
   useEffect(() => {
     let isMounted = true;
     const gerenciarDicaDiaria = async () => {
       if (!casalId) return;
-      
-      // Se a data de hoje já for a data que está no firebase, não faz nada!
       if (dicaDataFirebase === dataHojeStr) return;
 
       try {
@@ -135,7 +127,6 @@ export const OrcamentoLivreScreen = ({
         const textoLimpo = resposta.replace(/^"|"$/g, '');
         
         if (isMounted && textoLimpo) {
-          // Salva no banco de dados para travar no dia de hoje
           await updateDoc(doc(db, 'casais', casalId), {
             dicaLazerData: dataHojeStr,
             dicaLazerTexto: textoLimpo
@@ -144,11 +135,9 @@ export const OrcamentoLivreScreen = ({
       } catch (e) { }
     };
     
-    // Só tenta gerar se a data carregada do Firebase não for a de hoje.
     if (dicaDataFirebase !== '' && dicaDataFirebase !== dataHojeStr) {
       gerenciarDicaDiaria();
     } else if (dicaDataFirebase === '') {
-      // Primeira vez abrindo no dia
       gerenciarDicaDiaria();
     }
 
@@ -190,6 +179,15 @@ export const OrcamentoLivreScreen = ({
       
       if (idEdicao) {
         await updateDoc(doc(db, 'casais', casalId, 'saidas', idEdicao), dados);
+        // ✨ Notificação ao editar um plano
+        await updateDoc(doc(db, 'casais', casalId), {
+          notificacoes: arrayUnion({
+            id: Date.now().toString(),
+            texto: `${meuNome} alterou os detalhes do rolê "${simTitulo}"!`,
+            lida: false,
+            createdAt: new Date().toISOString()
+          })
+        });
       } else {
         await addDoc(collection(db, 'casais', casalId, 'saidas'), { ...dados, createdAt: serverTimestamp() });
         await updateDoc(doc(db, 'casais', casalId), {
@@ -265,6 +263,16 @@ export const OrcamentoLivreScreen = ({
       if (v1 > 0) await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { desc: v2 > 0 ? `${modalConcluir.titulo} (${parceiro1})` : modalConcluir.titulo, pagoPor: parceiro1, valor: v1, data: 'Hoje', createdAt: serverTimestamp() });
       if (v2 > 0) await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { desc: v1 > 0 ? `${modalConcluir.titulo} (${parceiro2})` : modalConcluir.titulo, pagoPor: parceiro2, valor: v2, data: 'Hoje', createdAt: serverTimestamp() });
       
+      // ✨ Disparando a Notificação de Conclusão de Rolê!
+      await updateDoc(doc(db, 'casais', casalId), {
+        notificacoes: arrayUnion({
+          id: Date.now().toString(),
+          texto: `${meuNome} marcou o rolê "${modalConcluir.titulo}" como concluído!`,
+          lida: false,
+          createdAt: new Date().toISOString()
+        })
+      });
+
       const diferenca = modalConcluir.estimado - valorGastoEfetivo;
       if (diferenca > 0) { setSobraDetectada(diferenca); setPassoConclusao('sobra'); } else { setModalConcluir(null); }
     } catch (e) {} finally { setIsProcessando(false); }
@@ -282,7 +290,7 @@ export const OrcamentoLivreScreen = ({
         restanteLazer={restanteLazer} porcentagemUso={porcentagemUso}
         gastoP1={gastoP1} gastoP2={gastoP2} parceiro1={parceiro1} parceiro2={parceiro2} corP1={corP1} corP2={corP2} formatMoney={formatMoney} dicaRapida={dicaRapida}
         caixinhasValidas={caixinhasValidas} gastosPorCaixinha={gastosPorCaixinha} setEditandoCaixinhas={setEditandoCaixinhas}
-        setAssistenteAberto={setAssistenteAberto} // ✨ Passando a função para o botão!
+        setAssistenteAberto={setAssistenteAberto} 
       />
 
       {!simuladorAberto && (
@@ -324,9 +332,11 @@ export const OrcamentoLivreScreen = ({
         parceiro1={parceiro1} parceiro2={parceiro2} corP1={corP1} corP2={corP2} formatMoney={formatMoney}
       />
 
+      {/* ✨ REPASSANDO O SEU NOME PARA AS CAIXINHAS */}
       <OrcamentoModalCaixinhas
         editandoCaixinhas={editandoCaixinhas} setEditandoCaixinhas={setEditandoCaixinhas} casalId={casalId}
         caixinhasValidas={caixinhasValidas} limiteMensalLazer={limiteMensalLazer} formatMoney={formatMoney}
+        meuNome={meuNome} 
       />
 
       <OrcamentoModalAgenda
@@ -336,7 +346,6 @@ export const OrcamentoLivreScreen = ({
         abrirNovoPlanoComData={abrirNovoPlanoComData}
       />
 
-      {/* ✨ MODAL DO ASSISTENTE INTELIGENTE! */}
       <OrcamentoModalAssistente
         assistenteAberto={assistenteAberto} setAssistenteAberto={setAssistenteAberto}
         casalId={casalId} parceiro1={parceiro1} parceiro2={parceiro2}

@@ -1,13 +1,13 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore'; // ✨ Importado arrayUnion
 import { db } from '../../services/firebase';
 
 export const OrcamentoModalAgenda = ({
   agendaAberto, setAgendaAberto, casalId,
   agendaP1, agendaP2, currentUserRole,
-  parceiro1, parceiro2, corP1, corP2,
-  abrirNovoPlanoComData // ✨ Nova função recebida do Pai
+  parceiro1, parceiro2, corP1, corP2, meuNome, // ✨ Agora usa o meuNome para notificar
+  abrirNovoPlanoComData 
 }: any) => {
 
   if (!agendaAberto) return null;
@@ -19,7 +19,6 @@ export const OrcamentoModalAgenda = ({
   const dias = Array.from({length: diasNoMes}, (_, i) => i + 1);
   const mesNome = hoje.toLocaleDateString('pt-BR', { month: 'long' });
   
-  // ✨ Descobre em que dia da semana cai o dia 1 para alinhar o calendário
   const primeiroDiaSemana = new Date(ano, mes, 1).getDay(); 
 
   const minhaAgenda = currentUserRole === 'p1' ? agendaP1 : agendaP2;
@@ -28,18 +27,36 @@ export const OrcamentoModalAgenda = ({
   const toggleDia = async (dia: number) => {
     const diaStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
     let novaAgenda = [...minhaAgenda];
+    
+    // Descobre se estamos marcando um novo dia livre ou só desmarcando
+    const isAdicionando = !novaAgenda.includes(diaStr);
 
     if (novaAgenda.includes(diaStr)) novaAgenda = novaAgenda.filter((d: string) => d !== diaStr);
     else novaAgenda.push(diaStr);
 
-    await updateDoc(doc(db, 'casais', casalId), { [campoAtualizacao]: novaAgenda });
+    const dataFormatada = diaStr.split('-').reverse().join('/');
+    
+    // Objeto base para atualizar a base de dados
+    const updateData: any = { [campoAtualizacao]: novaAgenda };
+    
+    // ✨ Só manda notificação se estiver a adicionar um dia livre
+    if (isAdicionando) {
+      updateData.notificacoes = arrayUnion({
+        id: Date.now().toString(),
+        texto: `${meuNome} marcou o dia ${dataFormatada} como livre na agenda!`,
+        lida: false,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    await updateDoc(doc(db, 'casais', casalId), updateData);
   };
 
   const matches = agendaP1.filter((d: string) => agendaP2.includes(d)).sort();
 
   const handleAgendarMatch = (dataStr: string) => {
     setAgendaAberto(false);
-    abrirNovoPlanoComData(dataStr); // Abre o planner já com a data preenchida!
+    abrirNovoPlanoComData(dataStr); 
   };
 
   return createPortal(
@@ -53,21 +70,17 @@ export const OrcamentoModalAgenda = ({
           Selecione os seus dias livres em <span style={{textTransform: 'capitalize', fontWeight: 'bold', color: 'var(--accent)'}}>{mesNome}</span>.
         </p>
 
-        {/* LEGENDA VISUAL COMPACTA */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '0.75rem', fontWeight: 'bold', background: 'var(--code-bg)', padding: '12px', borderRadius: '16px', border: '1px solid var(--border)' }}>
           <span style={{ color: corP1, display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width:10, height:10, borderRadius:'50%', background: corP1}}></div> {parceiro1}</span>
           <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width:12, height:12, borderRadius:'50%', background: '#f59e0b', boxShadow: '0 0 8px rgba(245, 158, 11, 0.8)'}}></div> MATCH</span>
           <span style={{ color: corP2, display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width:10, height:10, borderRadius:'50%', background: corP2}}></div> {parceiro2}</span>
         </div>
 
-        {/* ✨ GRELHA DO CALENDÁRIO CORRIGIDA */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', marginBottom: '24px' }}>
-          {/* Cabeçalho dos dias da semana */}
           {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
             <div key={d} style={{ textAlign: 'center', fontSize: '0.7rem', fontWeight: 'bold', color: 'var(--text)', marginBottom: '8px' }}>{d}</div>
           ))}
           
-          {/* Espaços vazios para alinhar o dia 1 */}
           {Array.from({ length: primeiroDiaSemana }).map((_, i) => <div key={`empty-${i}`} />)}
 
           {dias.map(dia => {
@@ -90,7 +103,6 @@ export const OrcamentoModalAgenda = ({
           })}
         </div>
 
-        {/* ✨ LISTA DE MATCHES COM BOTÃO DE AGENDAR */}
         {matches.length > 0 && (
           <div className="animate-fade-in" style={{ background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '20px', borderRadius: '20px', marginBottom: '24px' }}>
             <h4 style={{ margin: '0 0 16px 0', color: '#d97706', display: 'flex', alignItems: 'center', gap: '8px' }}>✨ Dias Livres Juntos</h4>

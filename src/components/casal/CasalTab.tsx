@@ -8,6 +8,7 @@ import { OrcamentoLivreScreen } from './OrcamentoLivreScreen';
 import { MetasScreen } from './MetasScreen';
 import { Desafio200Screen } from './Desafio200Screen';
 import { OnboardingCasal } from './OnboardingCasal';
+import { ConexaoScreen } from './ConexaoScreen';
 
 // ✨ NOVO: Recebemos o activeView e setActiveView das props
 export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = ({ activeView = 'hub', setActiveView = () => {} }) => {
@@ -213,6 +214,7 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
     case 'desafio200': return <Desafio200Screen {...screenProps} />;
     case 'metas': return <MetasScreen {...screenProps} />;
     case 'lazer': return <OrcamentoLivreScreen {...screenProps} />;
+    case 'conexao': return <ConexaoScreen {...screenProps} />;
     default: return <HubScreen {...screenProps} />;
   }
 };

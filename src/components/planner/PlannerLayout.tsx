@@ -3,7 +3,6 @@ import { auth } from '../../services/firebase';
 import { GeminiWidget } from '../gemini/GeminiWidget';
 
 // ✨ 1. Importamos a sua logo aqui no topo!
-// (Se o PlannerLayout.tsx estiver dentro de src/components ou src/pages, o caminho "../" volta para o "src")
 import logoApp from '../../assets/image/logo.png'; 
 
 import "../../pages/Planner.css";
@@ -40,6 +39,12 @@ export const PlannerLayout: React.FC<PlannerLayoutProps> = ({ children, activeTa
       label: 'Metas',
       icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={activeTab === 'metas' ? "2.5" : "2"}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
     },
+    // ✨ AQUI ESTÁ O NOVO BOTÃO DE CONEXÃO / CHAT
+    { 
+      id: 'conexao', 
+      label: 'Conexão',
+      icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={activeTab === 'conexao' ? "2.5" : "2"} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+    },
     { 
       id: 'configuracoes', 
       label: 'Perfil',
@@ -54,7 +59,7 @@ export const PlannerLayout: React.FC<PlannerLayoutProps> = ({ children, activeTa
   return (
     <div className="mobile-app-container">
       
-      {/* ✨ 2. HEADER SIMPLES NO TOPO (Agora com a sua imagem!) */}
+      {/* HEADER SIMPLES NO TOPO */}
       <div className="app-header">
         <img 
           src={logoApp} 

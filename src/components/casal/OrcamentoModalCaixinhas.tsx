@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore'; // ✨ Importado arrayUnion
 import { db } from '../../services/firebase';
 
 const PALETA_DE_CORES = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e', '#84cc16', '#0ea5e9', '#eab308'];
 
-// ✨ CATÁLOGO DE ÍCONES (Saiu ticket/carro, Entrou avião!)
 const ICONS: Record<string, JSX.Element> = {
   star: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>,
   food: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>,
@@ -21,7 +20,7 @@ const ICONS: Record<string, JSX.Element> = {
 const ICON_KEYS = Object.keys(ICONS);
 
 export const OrcamentoModalCaixinhas = ({
-  editandoCaixinhas, setEditandoCaixinhas, casalId, caixinhasValidas, limiteMensalLazer, formatMoney
+  editandoCaixinhas, setEditandoCaixinhas, casalId, caixinhasValidas, limiteMensalLazer, formatMoney, meuNome
 }: any) => {
   const [lista, setLista] = useState<any[]>([]);
   const [isProcessando, setIsProcessando] = useState(false);
@@ -43,7 +42,16 @@ export const OrcamentoModalCaixinhas = ({
   const handleSalvar = async () => {
     setIsProcessando(true);
     try {
-      await updateDoc(doc(db, 'casais', casalId), { caixinhas: lista });
+      // ✨ Salvando e Notificando o parceiro das alterações nas categorias!
+      await updateDoc(doc(db, 'casais', casalId), { 
+        caixinhas: lista,
+        notificacoes: arrayUnion({
+          id: Date.now().toString(),
+          texto: `${meuNome} atualizou as Categorias de Lazer!`,
+          lida: false,
+          createdAt: new Date().toISOString()
+        })
+      });
       setEditandoCaixinhas(false);
     } catch (e) {
       console.error("Erro ao salvar categorias:", e);
@@ -61,12 +69,6 @@ export const OrcamentoModalCaixinhas = ({
     setLista(lista.map(c => c.id === id ? { ...c, [campo]: valor } : c));
   };
 
-  const ciclarIcone = (id: string, currentIcon: string) => {
-    const currentIndex = ICON_KEYS.indexOf(currentIcon || 'star');
-    const nextIndex = (currentIndex + 1) % ICON_KEYS.length;
-    atualizarCaixinha(id, 'icone', ICON_KEYS[nextIndex]);
-  };
-
   const efetivarExclusao = () => {
     if (confirmarExclusao) {
       setLista(lista.filter(c => c.id !== confirmarExclusao));
@@ -80,7 +82,6 @@ export const OrcamentoModalCaixinhas = ({
         <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderRadius: '32px 32px 0 0', padding: '32px 24px 60px', maxHeight: '90vh', overflowY: 'auto' }}>
           <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px' }}></div>
           
-          {/* ✨ TÍTULO LIMPO E LEGENDA INICIAL */}
           <h3 style={{ margin: '0 0 8px 0', color: 'var(--text-h)', textAlign: 'center' }}>Categorias de Lazer</h3>
           <p style={{ margin: '0 0 24px 0', color: 'var(--text)', fontSize: '0.9rem', textAlign: 'center', lineHeight: '1.4' }}>
             Organize os seus gastos. Crie categorias, escolha as cores, ícones e distribua o seu orçamento mensal.

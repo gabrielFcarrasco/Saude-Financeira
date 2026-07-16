@@ -3,6 +3,7 @@ import { PlannerLayout } from '../components/planner/PlannerLayout';
 import { CasalTab } from '../components/casal/CasalTab';
 import { ConfiguracoesTab } from '../components/tabs/ConfiguracoesTab';
 
+
 export const Planner = () => {
   // A aba padrão agora é o Hub (Início)
   const [activeTab, setActiveTab] = useState('hub');
