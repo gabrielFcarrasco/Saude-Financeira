@@ -13,22 +13,58 @@ export const OrcamentoModalAssistente = ({
   const [respostaIA, setRespostaIA] = useState('');
   const [isPensando, setIsPensando] = useState(false);
   
+  // Estados para a animação de "Pensando..."
+  const [etapaIA, setEtapaIA] = useState('');
+  const [pontinhos, setPontinhos] = useState('');
+  
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Auto-scroll para o fundo do chat
   useEffect(() => {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
-  }, [perguntaFeita, respostaIA, isPensando]);
+  }, [perguntaFeita, respostaIA, isPensando, pontinhos]);
 
+  // Limpa o chat ao fechar o modal
   useEffect(() => {
     if (!assistenteAberto) {
       setInputTexto('');
       setPerguntaFeita('');
       setRespostaIA('');
+      setIsPensando(false);
     }
   }, [assistenteAberto]);
+
+  // Lógica da animação de estágios (Pensando -> Analisando -> Digitando)
+  useEffect(() => {
+    let timer1: NodeJS.Timeout;
+    let timer2: NodeJS.Timeout;
+    let intervalPontos: NodeJS.Timeout;
+
+    if (isPensando) {
+      setEtapaIA('Pensando');
+      
+      // Anima os 3 pontinhos (...) independentemente do texto
+      intervalPontos = setInterval(() => {
+        setPontinhos(prev => prev.length >= 3 ? '' : prev + '.');
+      }, 400);
+
+      // Troca os textos com o passar dos segundos
+      timer1 = setTimeout(() => setEtapaIA('Analisando categorias'), 1500);
+      timer2 = setTimeout(() => setEtapaIA('Digitando'), 3500);
+    } else {
+      setEtapaIA('');
+      setPontinhos('');
+    }
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearInterval(intervalPontos);
+    };
+  }, [isPensando]);
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputTexto(e.target.value);
@@ -101,24 +137,21 @@ export const OrcamentoModalAssistente = ({
         
         <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px', flexShrink: 0 }}></div>
         
-        {/* TOPO: TÍTULO E FECHAR (Agora com o xmlns OBRIGATÓRIO) */}
+        {/* TOPO: TÍTULO E FECHAR COM O "✕" EM TEXTO (Infalível) */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0, paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
           <h3 style={{ margin: 0, color: 'var(--text-h)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.1rem' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line>
-              </svg>
+              {/* Robozinho (SVG em linhas, que está a funcionar no seu projeto) */}
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg>
             </div>
             Assistente
           </h3>
+          
           <button 
             onClick={() => setAssistenteAberto(false)} 
-            style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+            style={{ background: 'var(--bg)', border: '1px solid var(--border)', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', fontSize: '1.2rem', fontFamily: 'sans-serif', padding: 0 }}
           >
-            {/* O X garantido com xmlns e currentColor */}
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
+            ✕
           </button>
         </div>
 
@@ -139,10 +172,7 @@ export const OrcamentoModalAssistente = ({
               {sugestoesRapidas.map((sug, i) => (
                 <button key={i} onClick={() => fazerPergunta(sug)} style={{ background: 'transparent', border: '1px solid var(--accent)', padding: '14px 16px', borderRadius: '16px', color: 'var(--accent)', fontWeight: '600', fontSize: '0.9rem', textAlign: 'left', cursor: 'pointer', transition: '0.2s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   {sug} 
-                  {/* Seta com xmlns */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </button>
               ))}
             </div>
@@ -155,13 +185,18 @@ export const OrcamentoModalAssistente = ({
             </div>
           )}
 
-          {/* LOADING OU RESPOSTA DA IA */}
+          {/* LOADING COM ETAPAS E BOLINHAS OU RESPOSTA DA IA */}
           {(isPensando || respostaIA) && (
             <div className="animate-fade-in" style={{ alignSelf: 'flex-start', background: 'var(--code-bg)', border: '1px solid var(--border)', padding: '16px 20px', borderRadius: '0 20px 20px 20px', maxWidth: '90%', marginTop: '4px' }}>
               {isPensando ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                  <div className="spinner" style={{ width: '20px', height: '20px', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                  Digitando...
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                  {/* Substituído o spinner travado por 3 bolinhas simples para dar ritmo */}
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', opacity: pontinhos.length >= 1 ? 1 : 0.3 }}></div>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', opacity: pontinhos.length >= 2 ? 1 : 0.3 }}></div>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', opacity: pontinhos.length >= 3 ? 1 : 0.3 }}></div>
+                  </div>
+                  {etapaIA}{pontinhos}
                 </div>
               ) : (
                 <div style={{ color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
@@ -188,9 +223,9 @@ export const OrcamentoModalAssistente = ({
             disabled={!inputTexto.trim() || isPensando}
             style={{ background: 'var(--accent)', border: 'none', width: '40px', height: '40px', borderRadius: '50%', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: (!inputTexto.trim() || isPensando) ? 0.5 : 1, transition: '0.2s', marginBottom: '2px', flexShrink: 0 }}
           >
-            {/* O Avião do WhatsApp com xmlns para garantir! */}
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none" style={{ transform: 'translateX(2px)' }}>
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+            {/* O Avião usando LINHAS (stroke) igual ao robozinho, assim não falha! */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'translate(-1px, 1px)' }}>
+              <line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
             </svg>
           </button>
         </div>
