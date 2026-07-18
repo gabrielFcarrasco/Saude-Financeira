@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Heart, Sparkles } from 'lucide-react';
 
 const FRASES_LOADING = [
@@ -14,6 +14,9 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
   const [fraseIndex, setFraseIndex] = useState(0);
   const [opacidadeTexto, setOpacidadeTexto] = useState(1);
   const [minTimePassed, setMinTimePassed] = useState(false);
+
+  // ✨ O SEGREDO ESTÁ AQUI: Uma trava que sobrevive às re-renderizações!
+  const finalizandoRef = useRef(false);
 
   useEffect(() => {
     // Garante que a tela fique pelo menos 3.5 segundos para a animação brilhar
@@ -53,15 +56,15 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
 
   // Vigia quando tudo estiver pronto E o tempo mínimo tiver passado
   useEffect(() => {
-    if (isReady && minTimePassed) {
+    // ✨ Verifica se já não começou a finalizar antes de disparar o timer!
+    if (isReady && minTimePassed && !finalizandoRef.current) {
+      finalizandoRef.current = true; // Trava a porta! Agora ninguém cancela mais.
       setProgress(100);
       
-      const fadeTimer = setTimeout(() => {
+      setTimeout(() => {
         setIsFading(true); 
         setTimeout(onFinish, 600); 
-      }, 400); // Dá um fôlego no 100% antes de sumir
-
-      return () => clearTimeout(fadeTimer);
+      }, 400); 
     }
   }, [isReady, minTimePassed, onFinish]);
 
@@ -127,7 +130,7 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
           Hub do Casal
         </h2>
         
-        {/* TEXTO DINÂMICO SEM EMOJIS */}
+        {/* TEXTO DINÂMICO */}
         <p style={{ 
           margin: '0 0 48px 0', 
           color: 'var(--text)', 
