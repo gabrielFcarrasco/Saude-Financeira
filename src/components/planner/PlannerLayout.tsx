@@ -2,9 +2,6 @@ import { useNavigate } from 'react-router-dom';
 import { auth } from '../../services/firebase';
 import { GeminiWidget } from '../gemini/GeminiWidget';
 
-// ✨ 1. Importamos a sua logo aqui no topo!
-import logoApp from '../../assets/image/logo.png'; 
-
 import "../../pages/Planner.css";
 
 interface PlannerLayoutProps {
@@ -39,7 +36,6 @@ export const PlannerLayout: React.FC<PlannerLayoutProps> = ({ children, activeTa
       label: 'Metas',
       icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={activeTab === 'metas' ? "2.5" : "2"}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
     },
-    // ✨ AQUI ESTÁ O NOVO BOTÃO DE CONEXÃO / CHAT
     { 
       id: 'conexao', 
       label: 'Conexão',
@@ -58,21 +54,12 @@ export const PlannerLayout: React.FC<PlannerLayoutProps> = ({ children, activeTa
 
   return (
     <div className="mobile-app-container">
-      
-      {/* HEADER SIMPLES NO TOPO */}
-      <div className="app-header">
-        <img 
-          src={logoApp} 
-          alt="Logo do App" 
-          style={{ height: '60px', objectFit: 'contain' }} 
-        />
-      </div>
+      {/* 🧹 CABEÇALHO REMOVIDO PARA DAR MAIS ESPAÇO À TELA */}
 
       <main className="mobile-app-content">
         {children}
       </main>
 
-      {/* BOTTOM NAVIGATION BAR */}
       <nav className="bottom-nav">
         {navItems.map(item => (
           <div 

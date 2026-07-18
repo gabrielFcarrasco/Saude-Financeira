@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../services/firebase';
 import './CasalTab.css';
@@ -10,7 +10,6 @@ import { Desafio200Screen } from './Desafio200Screen';
 import { OnboardingCasal } from './OnboardingCasal';
 import { ConexaoScreen } from './ConexaoScreen';
 
-// ✨ NOVO: Recebemos o activeView e setActiveView das props
 export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = ({ activeView = 'hub', setActiveView = () => {} }) => {
   const user = auth.currentUser;
   
@@ -26,9 +25,6 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
   const [fotoP2, setFotoP2] = useState<string | null>(null); 
   const [corP1, setCorP1] = useState<string>('#8b5cf6'); 
   const [corP2, setCorP2] = useState<string>('#10b981'); 
-
-  // ❌ REMOVA a linha do useState do activeView que existia aqui antes!
-  // const [activeView, setActiveView] = useState<'hub' | 'cofre'...
   
   const [contribuicoes, setContribuicoes] = useState<any[]>([]);
   const [saidas, setSaidas] = useState<any[]>([]);
@@ -38,7 +34,6 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
   const [desafioP2, setDesafioP2] = useState<number[]>([]);       
   const [limiteMensalLazer, setLimiteMensalLazer] = useState(0);
 
-  // Estados dos formulários repassados para as abas
   const [editandoLimite, setEditandoLimite] = useState(false);
   const [novoLimiteInput, setNovoLimiteInput] = useState('');
   const [simuladorAberto, setSimuladorAberto] = useState(false);
@@ -52,6 +47,10 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
   const [sobraDetectada, setSobraDetectada] = useState(0);
   const [novoDepositoAberto, setNovoDepositoAberto] = useState(false);
 
+  // ✨ REF GLOBAL PARA RASTREAR NOVAS NOTIFICAÇÕES EM TEMPO REAL
+  const qtdNotificacoesGlobal = useRef(-1);
+
+  // Busca inicial dos dados do casal
   useEffect(() => {
     if (!user) return;
     let unsubCasal = () => {};
@@ -106,6 +105,7 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
     return () => { unsubCasal(); unsubRecebidos(); unsubEnviados(); };
   }, [user]);
 
+  // Sincronização de foto
   useEffect(() => {
     const syncPhoto = async () => {
       if (!user || !casalId || !user.photoURL) return;
@@ -119,6 +119,7 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
     syncPhoto();
   }, [user?.photoURL, casalId, parceiro1, parceiro2, fotoP1, fotoP2]);
 
+  // Carregamento das subcoleções
   useEffect(() => {
     if (statusVinculo !== 'vinculado' || !casalId) return;
     const unsubContr = onSnapshot(query(collection(db, 'casais', casalId, 'contribuicoes')), (snap) => setContribuicoes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
@@ -134,6 +135,87 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
     });
     return () => { unsubContr(); unsubDespesas(); unsubSaidas(); unsubMetas(); unsubDesafio(); };
   }, [statusVinculo, casalId]);
+
+  const meuNome = user?.displayName?.split(' ')[0] || '';
+  const currentUserRole = meuNome === parceiro1 ? 'p1' : 'p2';
+
+  // ✨ MOTOR DE ÁUDIO GLOBAL (O famoso Plim!)
+  const tocarSomNotificacao = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.3);
+      osc.stop(ctx.currentTime + 0.3);
+    } catch (e) {
+      console.log("Áudio bloqueado", e);
+    }
+  };
+
+  // ✨ VIGILANTE GLOBAL DE NOTIFICAÇÕES (Escuta tudo e apita se não foi você)
+  useEffect(() => {
+    if (statusVinculo !== 'vinculado' || !casalId) return;
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    const unsubGlobalNotif = onSnapshot(doc(db, 'casais', casalId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.notificacoes) {
+          const fetchNotifs = data.notificacoes;
+          const ordenadas = fetchNotifs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+          if (qtdNotificacoesGlobal.current !== -1 && fetchNotifs.length > qtdNotificacoesGlobal.current) {
+            const novaNotificacao = ordenadas[0];
+
+            // ⚠️ A TRAVA: Só apita se a ação veio da sua parceira(o)
+            if (!novaNotificacao.lida && !novaNotificacao.texto.includes(meuNome)) {
+              
+              // 1. Áudio
+              tocarSomNotificacao();
+              
+              // 2. Notificação Nativa (Correção para Celulares Android PWA)
+              if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                  if (navigator.serviceWorker) {
+                    navigator.serviceWorker.getRegistration().then((reg) => {
+                      if (reg) {
+                        reg.showNotification('Hub do Casal 💖', {
+                          body: novaNotificacao.texto,
+                          icon: '/logo.png',
+                          vibrate: [200, 100, 200]
+                        });
+                      } else {
+                        new Notification('Hub do Casal 💖', { body: novaNotificacao.texto });
+                      }
+                    });
+                  } else {
+                    new Notification('Hub do Casal 💖', { body: novaNotificacao.texto });
+                  }
+                } catch(e) {
+                  console.error(e);
+                }
+              }
+            }
+          }
+          qtdNotificacoesGlobal.current = fetchNotifs.length;
+        }
+      }
+    });
+
+    return () => unsubGlobalNotif();
+  }, [statusVinculo, casalId, meuNome]);
+
 
   const handleEnviarConvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,10 +261,6 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
   const totalDepositosP2 = contribuicoes.reduce((acc, curr) => acc + (Number(curr.p2Contr) || 0), 0);
   const totalCofre = totalDesafioP1 + totalDesafioP2 + totalDepositosP1 + totalDepositosP2;
 
-  // ✨ INTELIGÊNCIA DE QUEM ESTÁ LOGADO
-  const meuNome = user?.displayName?.split(' ')[0] || '';
-  const currentUserRole = meuNome === parceiro1 ? 'p1' : 'p2';
-
   const icons = {
     voltar: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>,
     cofre: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>,
@@ -196,7 +274,7 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
     parceiro1, parceiro2, fotoP1, fotoP2, corP1, corP2, activeView, setActiveView, formatMoney, icons,
     contribuicoes, setContribuicoes, saidas, setSaidas, metas, setMetas, 
     despesasRapidas, setDespesasRapidas, desafioP1, setDesafioP1, desafioP2, setDesafioP2,
-    totalCofre, casalId, currentUserRole, meuNome, // ✨ Adicionado
+    totalCofre, casalId, currentUserRole, meuNome, 
     limiteMensalLazer, setLimiteMensalLazer, editandoLimite, setEditandoLimite, novoLimiteInput, setNovoLimiteInput,
     simuladorAberto, setSimuladorAberto, simTitulo, setSimTitulo, simData, setSimData, simItems, setSimItems, initialSimItems,
     modalConcluir, setModalConcluir, valorReal, setValorReal, quemPagou, setQuemPagou, sobraDetectada, setSobraDetectada,

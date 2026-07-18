@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Heart, Sparkles } from 'lucide-react';
 
-// Sem emojis e com um tom mais relaxado
 const FRASES_LOADING = [
   "Arrumando o cantinho de vocês...",
   "Organizando as caixinhas de lazer...",
@@ -9,24 +8,33 @@ const FRASES_LOADING = [
   "Preparando tudo..."
 ];
 
-export const SplashScreen = ({ onFinish }: { onFinish: () => void }) => {
+export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish: () => void }) => {
   const [progress, setProgress] = useState(0);
   const [isFading, setIsFading] = useState(false);
-  
   const [fraseIndex, setFraseIndex] = useState(0);
   const [opacidadeTexto, setOpacidadeTexto] = useState(1);
+  const [minTimePassed, setMinTimePassed] = useState(false);
 
   useEffect(() => {
-    // 1. Barra enchendo de forma mais lenta (para acompanhar os 4s)
+    // Garante que a tela fique pelo menos 3.5 segundos para a animação brilhar
+    const minTimer = setTimeout(() => {
+      setMinTimePassed(true);
+    }, 3500);
+
+    return () => clearTimeout(minTimer);
+  }, []);
+
+  useEffect(() => {
     const progressInterval = setInterval(() => {
       setProgress((old) => {
-        // Sobe um pouquinho a cada tick para dar a sensação de processamento
+        // Se ainda não está pronto (IA carregando), trava a barra no 90%
+        if (old >= 90 && !isReady) return 90; 
+        
         const next = old + Math.random() * 10 + 2;
         return next > 100 ? 100 : next;
       });
     }, 400);
 
-    // 2. Frases trocando a cada 1.2s (dá tempo de ler com calma)
     const textInterval = setInterval(() => {
       setOpacidadeTexto(0);
       
@@ -37,22 +45,25 @@ export const SplashScreen = ({ onFinish }: { onFinish: () => void }) => {
       
     }, 1200);
 
-    // 3. Aumentado para 4 segundos no total
-    const timer = setTimeout(() => {
-      clearInterval(progressInterval);
-      clearInterval(textInterval);
-      setProgress(100);
-      setIsFading(true); 
-      
-      setTimeout(onFinish, 600); 
-    }, 6000);
-
     return () => {
       clearInterval(progressInterval);
       clearInterval(textInterval);
-      clearTimeout(timer);
     };
-  }, [onFinish]);
+  }, [isReady]);
+
+  // Vigia quando tudo estiver pronto E o tempo mínimo tiver passado
+  useEffect(() => {
+    if (isReady && minTimePassed) {
+      setProgress(100);
+      
+      const fadeTimer = setTimeout(() => {
+        setIsFading(true); 
+        setTimeout(onFinish, 600); 
+      }, 400); // Dá um fôlego no 100% antes de sumir
+
+      return () => clearTimeout(fadeTimer);
+    }
+  }, [isReady, minTimePassed, onFinish]);
 
   return (
     <>

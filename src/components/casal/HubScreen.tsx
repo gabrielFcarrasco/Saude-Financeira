@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { collection, addDoc, doc, updateDoc, serverTimestamp, onSnapshot, arrayUnion } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, onSnapshot, arrayUnion, getDoc } from 'firebase/firestore'; 
 import { db } from '../../services/firebase'; 
-import { frases, versiculos } from './mensagens'; 
+import { SplashScreen } from '../SplashScreen'; 
+
+// ✨ IMPORTANDO A LOGO PELO CAMINHO CORRETO
+import logoApp from '../../assets/image/logo.png'; 
+
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 const PALETA_DE_CORES = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e', '#84cc16'];
 const BANCOS = ['Nubank', 'Itaú', 'Inter', 'Bradesco', 'Santander', 'C6 Bank', 'Caixa', 'Banco do Brasil', 'Sicoob', 'BTG Pactual', 'Dinheiro Físico', 'Outro'];
 
-// ✨ O SEGREDO: Sininho convertido em imagem (Imune a resets de CSS)
 const ICON_BELL = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b5cf6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9'/%3E%3Cpath d='M13.73 21a2 2 0 0 1-3.46 0'/%3E%3C/svg%3E";
 
 export const HubScreen = ({ 
@@ -16,6 +20,12 @@ export const HubScreen = ({
   contribuicoes, despesasRapidas, desafioP1, desafioP2, 
   novoDepositoAberto, setNovoDepositoAberto,
 }: any) => {
+
+  const [aiPronta, setAiPronta] = useState(false);
+  const [splashFinalizado, setSplashFinalizado] = useState(false);
+  
+  const [mensagemIA, setMensagemIA] = useState('');
+  const [saudacao, setSaudacao] = useState('Olá');
 
   const [mostrarExtratoCompleto, setMostrarExtratoCompleto] = useState(false);
   const [alertMsg, setAlertMsg] = useState('');
@@ -26,54 +36,69 @@ export const HubScreen = ({
   
   const [abrindoSeletor, setAbrindoSeletor] = useState<'p1' | 'p2' | null>(null);
   const [isProcessando, setIsProcessando] = useState(false);
-  const [fraseDia] = useState(() => frases[Math.floor(Math.random() * frases.length)]);
-  const [versiculoDia] = useState(() => versiculos[Math.floor(Math.random() * versiculos.length)]);
-  const [textoVersiculo, refVersiculo] = versiculoDia.split(' - ');
 
   const [notificacoes, setNotificacoes] = useState<any[]>([]);
   const [notificacoesAbertas, setNotificacoesAbertas] = useState(false);
-  
-  const qtdNotificacoesAnterior = useRef(-1);
 
-  // Escutar Firebase e gerenciar notificações nativas
+  const nomeDoParceiro = meuNome === parceiro1 ? parceiro2 : parceiro1;
+  const minhaCor = currentUserRole === 'p1' ? corP1 : corP2;
+
+  useEffect(() => {
+    const carregarBoasVindas = async () => {
+      const hora = new Date().getHours();
+      if (hora >= 5 && hora < 12) setSaudacao('Bom dia');
+      else if (hora >= 12 && hora < 18) setSaudacao('Boa tarde');
+      else setSaudacao('Boa noite');
+
+      const hoje = new Date().toISOString().split('T')[0];
+      const cacheKey = `gemini_msg_${hoje}_${meuNome}`;
+      const msgSalva = localStorage.getItem(cacheKey);
+
+      if (msgSalva) {
+        setMensagemIA(msgSalva);
+        setAiPronta(true); 
+        return;
+      }
+
+      if (GEMINI_API_KEY) {
+        try {
+          const prompt = `Você é um conselheiro financeiro de casais. O usuário logado é ${meuNome} e o seu parceiro(a) é ${nomeDoParceiro}. Crie apenas uma frase ou pergunta criativa, curta (máximo 120 caracteres) e amigável para inspirar ${meuNome} a cuidar do futuro financeiro do casal hoje. Seja leve e evite clichês. Não use aspas.`;
+          
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { maxOutputTokens: 50, temperature: 0.8 }
+            })
+          });
+
+          const data = await response.json();
+          const textoIA = data.candidates[0].content.parts[0].text.trim();
+          
+          localStorage.setItem(cacheKey, textoIA);
+          setMensagemIA(textoIA);
+        } catch (error) {
+          setMensagemIA(`Que tal revisarem as metas de vocês hoje, ${meuNome}? O futuro agradece!`);
+        }
+      } else {
+        setMensagemIA(`Que tal revisarem as metas de vocês hoje, ${meuNome}? O futuro agradece!`);
+      }
+      
+      setAiPronta(true); 
+    };
+
+    carregarBoasVindas();
+  }, [meuNome, nomeDoParceiro]);
+  
   useEffect(() => {
     if (!casalId) return;
-
-    // Pede permissão para enviar notificações no celular logo que entra
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-
     const unsub = onSnapshot(doc(db, 'casais', casalId), (docSnap) => {
       if (docSnap.exists() && docSnap.data().notificacoes) {
         const fetchNotifs = docSnap.data().notificacoes;
-        const ordenadas = fetchNotifs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        
+        const notificacoesDoParceiro = fetchNotifs.filter((n: any) => !n.texto.includes(meuNome));
+        const ordenadas = notificacoesDoParceiro.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setNotificacoes(ordenadas);
-
-        // Se a quantidade de notificações aumentou, dispara no aparelho
-        if (qtdNotificacoesAnterior.current !== -1 && fetchNotifs.length > qtdNotificacoesAnterior.current) {
-          const novaNotificacao = ordenadas[0];
-          
-          if (!novaNotificacao.lida && !novaNotificacao.texto.includes(meuNome)) {
-            if ('Notification' in window && Notification.permission === 'granted') {
-              if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.ready.then((sw) => {
-                  sw.showNotification('Hub do Casal', {
-                    body: novaNotificacao.texto,
-                    vibrate: [200, 100, 200]
-                  });
-                }).catch(() => {
-                  new Notification('Hub do Casal', { body: novaNotificacao.texto });
-                });
-              } else {
-                new Notification('Hub do Casal', { body: novaNotificacao.texto });
-              }
-            }
-          }
-        }
-        
-        qtdNotificacoesAnterior.current = fetchNotifs.length;
       }
     });
     return () => unsub();
@@ -83,9 +108,18 @@ export const HubScreen = ({
 
   const limparNotificacoes = async () => {
     if(!casalId) return;
-    const lidas = notificacoes.map(n => ({...n, lida: true}));
-    await updateDoc(doc(db, 'casais', casalId), { notificacoes: lidas });
-    setNotificacoesAbertas(false);
+    try {
+      const docRef = doc(db, 'casais', casalId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const todasAsNotificacoes = docSnap.data().notificacoes || [];
+        const atualizadas = todasAsNotificacoes.map((n: any) => ({ ...n, lida: true }));
+        await updateDoc(docRef, { notificacoes: atualizadas });
+      }
+      setNotificacoesAbertas(false);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const totalDesafioP1 = desafioP1.reduce((a: number, b: number) => a + b, 0);
@@ -99,7 +133,6 @@ export const HubScreen = ({
 
   const percP1 = totalCofre > 0 ? (totalP1 / totalCofre) * 100 : 50;
   const percP2 = totalCofre > 0 ? (totalP2 / totalCofre) * 100 : 50;
-  const minhaCor = currentUserRole === 'p1' ? corP1 : corP2;
 
   const extratoUnificado = [
     ...contribuicoes.map((c: any) => {
@@ -110,13 +143,9 @@ export const HubScreen = ({
       else if (vP2 > 0 && vP1 === 0) detalheDepositantes = `Aporte de ${parceiro2}`;
       else detalheDepositantes = `${parceiro1}: ${formatMoney(vP1)} | ${parceiro2}: ${formatMoney(vP2)}`;
 
-      return {
-        id: c.id, tipo: 'entrada', titulo: 'Depósito no Cofre', data: c.mesData || 'Mês Atual', valor: vP1 + vP2, detalhe: `${c.local ? `${c.local} • ` : ''}${detalheDepositantes}`, timestamp: c.createdAt?.toMillis() || 0
-      };
+      return { id: c.id, tipo: 'entrada', titulo: 'Depósito no Cofre', data: c.mesData || 'Mês Atual', valor: vP1 + vP2, detalhe: `${c.local ? `${c.local} • ` : ''}${detalheDepositantes}`, timestamp: c.createdAt?.toMillis() || 0 };
     }),
-    ...despesasRapidas.map((d: any) => ({
-      id: d.id, tipo: 'saida', titulo: d.desc, data: d.data, valor: Number(d.valor || 0), detalhe: `Pago por ${d.pagoPor}`, timestamp: d.createdAt?.toMillis() || 0
-    }))
+    ...despesasRapidas.map((d: any) => ({ id: d.id, tipo: 'saida', titulo: d.desc, data: d.data, valor: Number(d.valor || 0), detalhe: `Pago por ${d.pagoPor}`, timestamp: d.createdAt?.toMillis() || 0 }))
   ].sort((a, b) => b.timestamp - a.timestamp);
 
   const extratoExibido = mostrarExtratoCompleto ? extratoUnificado : extratoUnificado.slice(0, 4);
@@ -179,9 +208,14 @@ export const HubScreen = ({
     return <div style={{ width: '100%', height: '100%', background: corFundo, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.2rem', fontWeight: 'bold' }}>{nome ? nome.charAt(0).toUpperCase() : '?'}</div>;
   };
 
+  if (!splashFinalizado) {
+    return <SplashScreen isReady={aiPronta} onFinish={() => setSplashFinalizado(true)} />;
+  }
+
   return (
     <div className="hub-fintech-container animate-fade-in">
       
+      {/* MODAL DE AVISO */}
       {alertMsg && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '32px 24px', maxWidth: '320px', width: '100%', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
@@ -192,6 +226,7 @@ export const HubScreen = ({
         </div>, document.body
       )}
 
+      {/* SELETOR DE CORES */}
       {abrindoSeletor && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '32px 24px', borderRadius: '28px', width: '100%', maxWidth: '320px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
@@ -206,6 +241,7 @@ export const HubScreen = ({
         </div>, document.body
       )}
 
+      {/* NOVO DEPÓSITO */}
       {novoDepositoAberto && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div className="animate-slide-up" style={{ background: 'var(--bg)', padding: '24px', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '500px', maxHeight: '85vh', overflowY: 'auto', paddingBottom: '40px' }}>
@@ -247,6 +283,7 @@ export const HubScreen = ({
         </div>, document.body
       )}
 
+      {/* NOTIFICAÇÕES GERAIS DO HUB */}
       {notificacoesAbertas && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div className="animate-slide-up" style={{ background: 'var(--bg)', padding: '24px', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '500px', maxHeight: '85vh', overflowY: 'auto', paddingBottom: '40px' }}>
@@ -268,21 +305,31 @@ export const HubScreen = ({
         </div>, document.body
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
-        <div>
-          <p style={{ margin: 0, color: 'var(--text)', fontSize: '0.9rem', fontWeight: 600 }}>Olá, {meuNome}</p>
-          <h2 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Resumo Conjunto</h2>
-        </div>
+      {/* ✨ TOP BAR (Logo à esquerda, Sino à direita) ✨ */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', marginTop: '8px' }}>
+        <img src={logoApp} alt="Logo" style={{ height: '80px', objectFit: 'contain' }} />
         
-        {/* ✨ BOTÃO DO SININHO BLINDADO */}
-        <button onClick={() => setNotificacoesAbertas(true)} style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', width: '44px', height: '44px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}>
-          <img src={ICON_BELL} alt="Notificações" style={{ width: '22px', height: '22px' }} />
-          {temNotificacaoNaoLida && (
-            <span style={{ position: 'absolute', top: '8px', right: '10px', width: '10px', height: '10px', background: '#ef4444', borderRadius: '50%', border: '2px solid var(--code-bg)' }}></span>
-          )}
+        <button onClick={() => setNotificacoesAbertas(true)} style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+          <div style={{ position: 'relative', background: 'var(--code-bg)', border: '1px solid var(--border)', width: '44px', height: '44px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={ICON_BELL} alt="Notificações" style={{ width: '22px', height: '22px' }} />
+            {temNotificacaoNaoLida && (
+              <span style={{ position: 'absolute', top: '8px', right: '10px', width: '10px', height: '10px', background: '#ef4444', borderRadius: '50%', border: '2px solid var(--code-bg)' }}></span>
+            )}
+          </div>
         </button>
       </div>
 
+      {/* ✨ TEXTO DE BOAS-VINDAS E MENSAGEM DA IA (Alinhado à esquerda) ✨ */}
+      <div style={{padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginBottom: '32px', textAlign: 'left' }}>
+        <h2 style={{ margin: '0 0 6px 0', color: 'var(--text-h)', fontSize: '1.6rem', fontWeight: 'bold' }}>
+          {saudacao}, {meuNome}.
+        </h2>
+        <p style={{ margin: 0, color: 'var(--text)', fontSize: '0.95rem', lineHeight: '1.5' }}>
+          {mensagemIA}
+        </p>
+      </div>
+
+      {/* CARD CENTRAL (Saldo do Casal) */}
       <div className="hub-balance-card" style={{ padding: '40px 24px 32px', background: 'var(--code-bg)', borderRadius: '28px', boxShadow: '0 8px 24px rgba(0,0,0,0.04)', marginBottom: '24px', position: 'relative' }}>
         
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'absolute', top: '-28px', left: '0', right: '0' }}>
@@ -294,7 +341,7 @@ export const HubScreen = ({
           </div>
         </div>
 
-        <span style={{ color: 'var(--text)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>Cofre do Casal</span>
+        <span style={{ color: 'var(--text)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>Saldo do Casal</span>
         <h1 style={{ fontSize: '3rem', margin: '8px 0 24px 0', color: 'var(--text-h)', letterSpacing: '-1px' }}>{formatMoney(totalCofre)}</h1>
         
         <div style={{ width: '100%', height: '8px', background: 'var(--bg)', borderRadius: '10px', display: 'flex', overflow: 'hidden', marginBottom: '16px' }}>
@@ -314,6 +361,7 @@ export const HubScreen = ({
         </div>
       </div>
 
+      {/* BOTÕES DE AÇÃO RÁPIDA */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
         <button onClick={() => setNovoDepositoAberto(true)} style={{ padding: '16px', background: 'var(--code-bg)', border: 'none', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', color: 'var(--text-h)', fontWeight: 'bold' }}>
           <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
@@ -325,24 +373,7 @@ export const HubScreen = ({
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px' }}>
-         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: 'var(--code-bg)', padding: '20px', borderRadius: '20px', border: '1px solid var(--border)' }}>
-            <div style={{ color: 'var(--text)', opacity: 0.5 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
-            </div>
-            <div>
-               <p style={{ margin: '0 0 8px 0', color: 'var(--text-h)', fontSize: '0.9rem', fontStyle: 'italic', lineHeight: '1.4' }}>"{textoVersiculo}"</p>
-               {refVersiculo && <span style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>— {refVersiculo}</span>}
-            </div>
-         </div>
-         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(138, 43, 226, 0.05)', padding: '16px 20px', borderRadius: '20px', border: '1px solid rgba(138, 43, 226, 0.1)' }}>
-            <div style={{ color: 'var(--accent)' }}>
-               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-            </div>
-            <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.85rem', fontWeight: 500 }}>{fraseDia}</p>
-         </div>
-      </div>
-
+      {/* EXTRATO */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>Movimentações</h3>

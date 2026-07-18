@@ -14,9 +14,16 @@ export const OrcamentoHeader = ({
             <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>A Mesada do Mês</span>
             <h2 style={{ margin: '4px 0', color: 'var(--text-h)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.8rem' }}>
               {formatMoney(limiteMensalLazer)}
-              <button onClick={() => setEditandoLimite(true)} style={{ background: 'var(--bg)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-              </button>
+              <button 
+  onClick={() => setEditandoLimite(true)} 
+  style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', padding: '8px', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+  title="Editar Proporção"
+>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9"></path>
+    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+  </svg>
+</button>
             </h2>
           </div>
           <div style={{ textAlign: 'right' }}>
