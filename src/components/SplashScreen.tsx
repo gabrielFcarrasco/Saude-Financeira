@@ -17,11 +17,11 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
 
   const finalizandoRef = useRef(false);
 
+  // 1. Timer de Beleza (3.5s no mínimo)
   useEffect(() => {
     const minTimer = setTimeout(() => {
       setMinTimePassed(true);
     }, 3500);
-
     return () => clearTimeout(minTimer);
   }, []);
 
@@ -44,7 +44,6 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
     const progressInterval = setInterval(() => {
       setProgress((old) => {
         if (old >= 90 && !isReady) return 90; 
-        
         const next = old + Math.random() * 10 + 2;
         return next > 100 ? 100 : next;
       });
@@ -52,12 +51,10 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
 
     const textInterval = setInterval(() => {
       setOpacidadeTexto(0);
-      
       setTimeout(() => {
         setFraseIndex((prev) => (prev + 1) % FRASES_LOADING.length);
         setOpacidadeTexto(1);
       }, 200); 
-      
     }, 1200);
 
     return () => {
@@ -68,6 +65,7 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
 
   useEffect(() => {
     if (isReady && minTimePassed && !finalizandoRef.current) {
+      finalizandoRef.current = true; 
       finalizandoRef.current = true; 
       setProgress(100);
       
@@ -109,26 +107,9 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
       }}>
         
         <div style={{ position: 'relative', marginBottom: '48px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          
-          <div style={{
-            position: 'absolute', width: '100px', height: '100px', 
-            background: 'var(--accent)', borderRadius: '50%', zIndex: 0,
-            animation: 'pulseGlow 3s ease-in-out infinite'
-          }}></div>
-          
-          <div style={{
-            position: 'absolute', width: '130px', height: '130px',
-            border: '2px dashed rgba(138, 43, 226, 0.4)', borderRadius: '50%', zIndex: 1,
-            animation: 'spinSlow 15s linear infinite'
-          }}></div>
-
-          <div style={{
-            width: '90px', height: '90px', background: 'var(--code-bg)',
-            borderRadius: '50%', border: '2px solid rgba(138, 43, 226, 0.5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            position: 'relative', zIndex: 2, boxShadow: '0 16px 40px rgba(0,0,0,0.3)',
-            animation: 'floatHeart 3s ease-in-out infinite'
-          }}>
+          <div style={{ position: 'absolute', width: '100px', height: '100px', background: 'var(--accent)', borderRadius: '50%', zIndex: 0, animation: 'pulseGlow 3s ease-in-out infinite' }}></div>
+          <div style={{ position: 'absolute', width: '130px', height: '130px', border: '2px dashed rgba(138, 43, 226, 0.4)', borderRadius: '50%', zIndex: 1, animation: 'spinSlow 15s linear infinite' }}></div>
+          <div style={{ width: '90px', height: '90px', background: 'var(--code-bg)', borderRadius: '50%', border: '2px solid rgba(138, 43, 226, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 2, boxShadow: '0 16px 40px rgba(0,0,0,0.3)', animation: 'floatHeart 3s ease-in-out infinite' }}>
             <Heart size={44} color="var(--accent)" fill="var(--accent)" style={{ zIndex: 2 }} />
             <Sparkles size={24} color="#f59e0b" style={{ position: 'absolute', top: '-12px', right: '-12px', animation: 'floatHeart 2.5s ease-in-out infinite reverse' }} />
           </div>
@@ -151,11 +132,7 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
         </p>
 
         <div style={{ width: '200px', height: '4px', background: 'var(--code-bg)', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-          <div style={{
-            width: `${progress}%`, height: '100%', 
-            background: 'linear-gradient(90deg, var(--accent), #d946ef)',
-            transition: 'width 0.2s ease-out', borderRadius: '10px'
-          }}></div>
+          <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent), #d946ef)', transition: 'width 0.2s ease-out', borderRadius: '10px' }}></div>
         </div>
       </div>
     </>
