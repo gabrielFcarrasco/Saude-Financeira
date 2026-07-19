@@ -94,7 +94,6 @@ export const ConexaoChat = ({
     }
   };
 
-  // Removido o isAutomatica para as mensagens rápidas irem como o usuário!
   const enviarMensagem = async (texto: string) => {
     if (!texto.trim() || !casalId) return;
     setIsProcessando(true);
@@ -110,7 +109,7 @@ export const ConexaoChat = ({
       await addDoc(collection(db, 'casais', casalId, 'chat'), {
         texto: msg,
         sender: currentUserRole,
-        isAutomatica: false, // Agora todas vão com o seu balãozinho!
+        isAutomatica: false, 
         lida: false,
         createdAt: serverTimestamp()
       });
@@ -223,7 +222,7 @@ export const ConexaoChat = ({
   };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ flex: 1, height: '100%', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative', paddingBottom: '80px' }}>
       
       <div style={{ flex: 1, background: 'var(--bg)', borderRadius: '24px', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
         {mensagens.length === 0 ? (
@@ -234,64 +233,62 @@ export const ConexaoChat = ({
         <div ref={chatEndRef} />
       </div>
 
-      {novoTexto.trim() === '' && (
-        <div className="animate-fade-in" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', scrollbarWidth: 'none' }}>
-          <button onClick={gerarResumoAutomatico} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(59, 130, 246, 0.1)', border: `1px solid rgba(59, 130, 246, 0.4)`, color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
-            <img src={ICON_CHART} style={{ width: 14, height: 14 }} alt="chart" /> Saldo do Casal
-          </button>
-          <button onClick={() => enviarMensagem("Te amo demais! ❤️")} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(239, 68, 68, 0.1)', border: `1px solid rgba(239, 68, 68, 0.4)`, color: '#ef4444', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
-            <img src={ICON_HEART} style={{ width: 14, height: 14 }} alt="heart" /> Te amo!
-          </button>
-          <button onClick={() => enviarMensagem("Tô com tanta saudade de você...")} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(139, 92, 246, 0.1)', border: `1px solid rgba(139, 92, 246, 0.4)`, color: '#8b5cf6', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
-            <img src={ICON_SMILE} style={{ width: 14, height: 14 }} alt="smile" /> Tô com sdds
-          </button>
-          <button onClick={() => enviarMensagem("Bora jantar fora hoje?")} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(249, 115, 22, 0.1)', border: `1px solid rgba(249, 115, 22, 0.4)`, color: '#f97316', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
-            <img src={ICON_FOOD} style={{ width: 14, height: 14 }} alt="food" /> Bora jantar?
-          </button>
-          <button onClick={() => enviarMensagem("Já estou saindo!")} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(16, 185, 129, 0.1)', border: `1px solid rgba(16, 185, 129, 0.4)`, color: '#10b981', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
-            <img src={ICON_CHECK} style={{ width: 14, height: 14 }} alt="check" /> Já tô saindo!
-          </button>
-        </div>
-      )}
-
-      {mostrarEmojis && (
-        <div style={{ position: 'absolute', bottom: '60px', left: 0, right: '60px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '20px', padding: '12px', maxHeight: '200px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(32px, 1fr))', gap: '8px', zIndex: 10, boxShadow: '0 -4px 20px rgba(0,0,0,0.1)' }}>
-          {emojis.slice(0, 150).map((emoji: any) => (
-            <button key={emoji.slug} onClick={() => addEmoji(emoji.character)} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: '4px' }}>
-              {emoji.character}
+      <div style={{ marginTop: 'auto' }}>
+        {novoTexto.trim() === '' && (
+          <div className="animate-fade-in" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', scrollbarWidth: 'none' }}>
+            <button onClick={gerarResumoAutomatico} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(59, 130, 246, 0.1)', border: `1px solid rgba(59, 130, 246, 0.4)`, color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
+              <img src={ICON_CHART} style={{ width: 14, height: 14 }} alt="chart" /> Saldo do Casal
             </button>
-          ))}
-        </div>
-      )}
+            <button onClick={() => enviarMensagem("Te amo demais! ❤️")} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(239, 68, 68, 0.1)', border: `1px solid rgba(239, 68, 68, 0.4)`, color: '#ef4444', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
+              <img src={ICON_HEART} style={{ width: 14, height: 14 }} alt="heart" /> Te amo!
+            </button>
+            <button onClick={() => enviarMensagem("Tô com tanta saudade de você...")} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(139, 92, 246, 0.1)', border: `1px solid rgba(139, 92, 246, 0.4)`, color: '#8b5cf6', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
+              <img src={ICON_SMILE} style={{ width: 14, height: 14 }} alt="smile" /> Tô com sdds
+            </button>
+            <button onClick={() => enviarMensagem("Bora jantar fora hoje?")} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(249, 115, 22, 0.1)', border: `1px solid rgba(249, 115, 22, 0.4)`, color: '#f97316', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
+              <img src={ICON_FOOD} style={{ width: 14, height: 14 }} alt="food" /> Bora jantar?
+            </button>
+            <button onClick={() => enviarMensagem("Já estou saindo!")} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '20px', background: 'rgba(16, 185, 129, 0.1)', border: `1px solid rgba(16, 185, 129, 0.4)`, color: '#10b981', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}>
+              <img src={ICON_CHECK} style={{ width: 14, height: 14 }} alt="check" /> Já tô saindo!
+            </button>
+          </div>
+        )}
 
-      <div style={{ display: 'flex', gap: '8px', flexShrink: 0, alignItems: 'flex-end', position: 'relative' }}>
-        
-        <div style={{ flex: 1, background: 'var(--code-bg)', borderRadius: '24px', border: '1px solid var(--border)', display: 'flex', alignItems: 'flex-end', padding: '8px 12px' }}>
-          <button onClick={() => setMostrarEmojis(!mostrarEmojis)} style={{ background: 'transparent', border: 'none', padding: '4px 8px 4px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <img src={ICON_EMOJI_NEUTRAL} style={{ width: 22, height: 22 }} alt="emoji" />
+        {mostrarEmojis && (
+          <div style={{ position: 'absolute', bottom: '60px', left: 0, right: '60px', background: 'var(--code-bg)', border: '1px solid var(--border)', borderRadius: '20px', padding: '12px', maxHeight: '200px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(32px, 1fr))', gap: '8px', zIndex: 10, boxShadow: '0 -4px 20px rgba(0,0,0,0.1)' }}>
+            {emojis.slice(0, 150).map((emoji: any) => (
+              <button key={emoji.slug} onClick={() => addEmoji(emoji.character)} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: '4px' }}>
+                {emoji.character}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '8px', flexShrink: 0, alignItems: 'flex-end', position: 'relative' }}>
+          <div style={{ flex: 1, background: 'var(--code-bg)', borderRadius: '24px', border: '1px solid var(--border)', display: 'flex', alignItems: 'flex-end', padding: '8px 12px' }}>
+            <button onClick={() => setMostrarEmojis(!mostrarEmojis)} style={{ background: 'transparent', border: 'none', padding: '4px 8px 4px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img src={ICON_EMOJI_NEUTRAL} style={{ width: 22, height: 22 }} alt="emoji" />
+            </button>
+            
+            <textarea 
+              ref={inputRef}
+              rows={1}
+              value={novoTexto} 
+              onChange={handleInputText} 
+              onKeyDown={handleKeyDown}
+              placeholder="Mensagem" 
+              style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-h)', outline: 'none', fontSize: '1rem', resize: 'none', minHeight: '24px', maxHeight: '120px', padding: '2px 0', fontFamily: 'inherit', lineHeight: '1.4' }}
+            />
+          </div>
+
+          <button 
+            onClick={() => enviarMensagem(novoTexto)}
+            disabled={!novoTexto.trim() || isProcessando}
+            style={{ background: minhaCor, border: 'none', width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: !novoTexto.trim() ? 0.5 : 1, transition: '0.2s', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+          >
+            <img src={ICON_SEND} alt="Enviar" style={{ width: '20px', height: '20px', transform: 'translateX(-2px)' }} />
           </button>
-          
-          <textarea 
-            ref={inputRef}
-            rows={1}
-            value={novoTexto} 
-            onChange={handleInputText} 
-            onKeyDown={handleKeyDown}
-            placeholder="Mensagem" 
-            style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-h)', outline: 'none', fontSize: '1rem', resize: 'none', minHeight: '24px', maxHeight: '120px', padding: '2px 0', fontFamily: 'inherit', lineHeight: '1.4' }}
-          />
-          
-          {/* REMOVIDO O CLIPS DAQUI! */}
         </div>
-
-        <button 
-          onClick={() => enviarMensagem(novoTexto)}
-          disabled={!novoTexto.trim() || isProcessando}
-          style={{ background: minhaCor, border: 'none', width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: !novoTexto.trim() ? 0.5 : 1, transition: '0.2s', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-        >
-          <img src={ICON_SEND} alt="Enviar" style={{ width: '20px', height: '20px', transform: 'translateX(-2px)' }} />
-        </button>
-
       </div>
     </div>
   );
