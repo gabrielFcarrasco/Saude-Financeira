@@ -27,6 +27,8 @@ export const OrcamentoLivreScreen = ({
   const [agendaAberto, setAgendaAberto] = useState(false);
   const [agendaP1, setAgendaP1] = useState<string[]>([]);
   const [agendaP2, setAgendaP2] = useState<string[]>([]);
+  
+  const [alfabetoConfig, setAlfabetoConfig] = useState<any>(null);
 
   const [assistenteAberto, setAssistenteAberto] = useState(false);
 
@@ -56,6 +58,7 @@ export const OrcamentoLivreScreen = ({
         if (data.agendaP2) setAgendaP2(data.agendaP2);
         if (data.dicaLazerData) setDicaDataFirebase(data.dicaLazerData);
         if (data.dicaLazerTexto) setDicaRapida(data.dicaLazerTexto);
+        if (data.alfabetoConfig) setAlfabetoConfig(data.alfabetoConfig);
       }
     });
     return () => unsub();
@@ -151,8 +154,9 @@ export const OrcamentoLivreScreen = ({
     setSimuladorAberto(true);
   };
 
-  const abrirNovoPlanoComData = (dataStr: string) => {
-    setIdEdicao(null); setSimTitulo(''); 
+  const abrirNovoPlanoComData = (dataStr: string, tituloSugerido: string = '') => {
+    setIdEdicao(null); 
+    setSimTitulo(tituloSugerido); 
     setSimData(dataStr); 
     setSimItems([{ id: Date.now(), nome: '', valor: '', responsavel: 'ambos' }]);
     setSimCaixinha(caixinhasValidas[0].id);
@@ -167,8 +171,9 @@ export const OrcamentoLivreScreen = ({
     setSimuladorAberto(true);
   };
 
+  // ✨ ATUALIZADO: Agora permite salvar mesmo com valor ZERO!
   const handleSalvarPlano = async () => {
-    if (!casalId || !simTitulo || totalSimulacao <= 0) return;
+    if (!casalId || !simTitulo) return; 
     try {
       setIsProcessando(true);
       const dataFormatada = simData ? new Date(simData + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'A definir';
@@ -179,7 +184,6 @@ export const OrcamentoLivreScreen = ({
       
       if (idEdicao) {
         await updateDoc(doc(db, 'casais', casalId, 'saidas', idEdicao), dados);
-        // ✨ Notificação ao editar um plano
         await updateDoc(doc(db, 'casais', casalId), {
           notificacoes: arrayUnion({
             id: Date.now().toString(),
@@ -263,7 +267,6 @@ export const OrcamentoLivreScreen = ({
       if (v1 > 0) await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { desc: v2 > 0 ? `${modalConcluir.titulo} (${parceiro1})` : modalConcluir.titulo, pagoPor: parceiro1, valor: v1, data: 'Hoje', createdAt: serverTimestamp() });
       if (v2 > 0) await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { desc: v1 > 0 ? `${modalConcluir.titulo} (${parceiro2})` : modalConcluir.titulo, pagoPor: parceiro2, valor: v2, data: 'Hoje', createdAt: serverTimestamp() });
       
-      // ✨ Disparando a Notificação de Conclusão de Rolê!
       await updateDoc(doc(db, 'casais', casalId), {
         notificacoes: arrayUnion({
           id: Date.now().toString(),
@@ -332,7 +335,6 @@ export const OrcamentoLivreScreen = ({
         parceiro1={parceiro1} parceiro2={parceiro2} corP1={corP1} corP2={corP2} formatMoney={formatMoney}
       />
 
-      {/* ✨ REPASSANDO O SEU NOME PARA AS CAIXINHAS */}
       <OrcamentoModalCaixinhas
         editandoCaixinhas={editandoCaixinhas} setEditandoCaixinhas={setEditandoCaixinhas} casalId={casalId}
         caixinhasValidas={caixinhasValidas} limiteMensalLazer={limiteMensalLazer} formatMoney={formatMoney}
@@ -344,6 +346,8 @@ export const OrcamentoLivreScreen = ({
         agendaP1={agendaP1} agendaP2={agendaP2} currentUserRole={currentUserRole}
         parceiro1={parceiro1} parceiro2={parceiro2} corP1={corP1} corP2={corP2} meuNome={meuNome}
         abrirNovoPlanoComData={abrirNovoPlanoComData}
+        saidasMesAtual={saidasMesAtual} 
+        alfabetoConfig={alfabetoConfig} 
       />
 
       <OrcamentoModalAssistente

@@ -4,7 +4,6 @@ import { collection, addDoc, doc, updateDoc, serverTimestamp, onSnapshot, arrayU
 import { db } from '../../services/firebase'; 
 import { SplashScreen } from '../SplashScreen'; 
 
-// ✨ IMPORTANDO A LOGO PELO CAMINHO CORRETO
 import logoApp from '../../assets/image/logo.png'; 
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
@@ -16,13 +15,20 @@ const ICON_BELL = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.
 
 export const HubScreen = ({ 
   setActiveView, parceiro1, parceiro2, fotoP1, fotoP2, corP1, corP2, formatMoney,
-  casalId, metas, currentUserRole, meuNome,
-  contribuicoes, despesasRapidas, desafioP1, desafioP2, 
-  novoDepositoAberto, setNovoDepositoAberto,
+  casalId, currentUserRole, meuNome, novoDepositoAberto, setNovoDepositoAberto,
+  // ✨ CORREÇÃO APLICADA: Valores padrão = [] adicionados nas listas
+  metas = [], 
+  contribuicoes = [], 
+  despesasRapidas = [], 
+  desafioP1 = [], 
+  desafioP2 = [], 
 }: any) => {
 
   const [aiPronta, setAiPronta] = useState(false);
-  const [splashFinalizado, setSplashFinalizado] = useState(false);
+  
+  const [splashFinalizado, setSplashFinalizado] = useState(() => {
+    return sessionStorage.getItem('splash_visto') === 'true';
+  });
   
   const [mensagemIA, setMensagemIA] = useState('');
   const [saudacao, setSaudacao] = useState('Olá');
@@ -209,13 +215,20 @@ export const HubScreen = ({
   };
 
   if (!splashFinalizado) {
-    return <SplashScreen isReady={aiPronta} onFinish={() => setSplashFinalizado(true)} />;
+    return (
+      <SplashScreen 
+        isReady={aiPronta} 
+        onFinish={() => {
+          sessionStorage.setItem('splash_visto', 'true');
+          setSplashFinalizado(true);
+        }} 
+      />
+    );
   }
 
   return (
     <div className="hub-fintech-container animate-fade-in">
       
-      {/* MODAL DE AVISO */}
       {alertMsg && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '32px 24px', maxWidth: '320px', width: '100%', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
@@ -226,7 +239,6 @@ export const HubScreen = ({
         </div>, document.body
       )}
 
-      {/* SELETOR DE CORES */}
       {abrindoSeletor && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '32px 24px', borderRadius: '28px', width: '100%', maxWidth: '320px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
@@ -241,7 +253,6 @@ export const HubScreen = ({
         </div>, document.body
       )}
 
-      {/* NOVO DEPÓSITO */}
       {novoDepositoAberto && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div className="animate-slide-up" style={{ background: 'var(--bg)', padding: '24px', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '500px', maxHeight: '85vh', overflowY: 'auto', paddingBottom: '40px' }}>
@@ -283,7 +294,6 @@ export const HubScreen = ({
         </div>, document.body
       )}
 
-      {/* NOTIFICAÇÕES GERAIS DO HUB */}
       {notificacoesAbertas && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div className="animate-slide-up" style={{ background: 'var(--bg)', padding: '24px', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '500px', maxHeight: '85vh', overflowY: 'auto', paddingBottom: '40px' }}>
@@ -305,7 +315,6 @@ export const HubScreen = ({
         </div>, document.body
       )}
 
-      {/* ✨ TOP BAR (Logo à esquerda, Sino à direita) ✨ */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', marginTop: '8px' }}>
         <img src={logoApp} alt="Logo" style={{ height: '80px', objectFit: 'contain' }} />
         
@@ -319,7 +328,6 @@ export const HubScreen = ({
         </button>
       </div>
 
-      {/* ✨ TEXTO DE BOAS-VINDAS E MENSAGEM DA IA (Alinhado à esquerda) ✨ */}
       <div style={{padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginBottom: '32px', textAlign: 'left' }}>
         <h2 style={{ margin: '0 0 6px 0', color: 'var(--text-h)', fontSize: '1.6rem', fontWeight: 'bold' }}>
           {saudacao}, {meuNome}.
@@ -329,7 +337,6 @@ export const HubScreen = ({
         </p>
       </div>
 
-      {/* CARD CENTRAL (Saldo do Casal) */}
       <div className="hub-balance-card" style={{ padding: '40px 24px 32px', background: 'var(--code-bg)', borderRadius: '28px', boxShadow: '0 8px 24px rgba(0,0,0,0.04)', marginBottom: '24px', position: 'relative' }}>
         
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'absolute', top: '-28px', left: '0', right: '0' }}>
@@ -361,7 +368,6 @@ export const HubScreen = ({
         </div>
       </div>
 
-      {/* BOTÕES DE AÇÃO RÁPIDA */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
         <button onClick={() => setNovoDepositoAberto(true)} style={{ padding: '16px', background: 'var(--code-bg)', border: 'none', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', color: 'var(--text-h)', fontWeight: 'bold' }}>
           <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
@@ -373,7 +379,6 @@ export const HubScreen = ({
         </button>
       </div>
 
-      {/* EXTRATO */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>Movimentações</h3>

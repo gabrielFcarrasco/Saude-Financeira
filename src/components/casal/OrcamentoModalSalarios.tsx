@@ -8,10 +8,9 @@ export const OrcamentoModalSalarios = ({
 }: any) => {
   const [rendaP1, setRendaP1] = useState('');
   const [rendaP2, setRendaP2] = useState('');
-  const [percLazer, setPercLazer] = useState(15); // Começamos com a sugestão de 15%
+  const [percLazer, setPercLazer] = useState(15); 
   const [isProcessando, setIsProcessando] = useState(false);
 
-  // Ao abrir o modal, vai à base de dados buscar os salários guardados (se existirem)
   useEffect(() => {
     if (editandoLimite && casalId) {
       const buscarRendas = async () => {
@@ -29,7 +28,17 @@ export const OrcamentoModalSalarios = ({
 
   if (!editandoLimite) return null;
 
-  // A MATEMÁTICA DA PROPORÇÃO JUSTA
+  // ✨ MÁSCARA BANCÁRIA
+  const handleRendaChange = (e: any, setter: any) => {
+    const numbers = e.target.value.replace(/\D/g, '');
+    setter(numbers ? (parseInt(numbers, 10) / 100).toFixed(2) : '');
+  };
+
+  const formatMask = (val: string | number) => {
+    if (!val) return '';
+    return Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   const r1 = Number(rendaP1) || 0;
   const r2 = Number(rendaP2) || 0;
   const rendaTotal = r1 + r2;
@@ -66,19 +75,18 @@ export const OrcamentoModalSalarios = ({
           Quem ganha mais, contribui com um valor maior. Mas o peso no bolso ({percLazer}%) é exatamente o mesmo para os dois!
         </p>
 
-        {/* INPUTS DE SALÁRIO */}
+        {/* INPUTS DE SALÁRIO COM MÁSCARA */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
           <div style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '16px', border: `1px solid ${corP1}` }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: corP1, textTransform: 'uppercase' }}>Renda {parceiro1}</label>
-            <input type="number" value={rendaP1} onChange={e => setRendaP1(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', border: 'none', background: 'transparent', color: 'var(--text-h)', fontSize: '1.1rem', fontWeight: 'bold', marginTop: '8px', outline: 'none' }} />
+            <input type="text" inputMode="numeric" value={formatMask(rendaP1)} onChange={e => handleRendaChange(e, setRendaP1)} placeholder="0,00" style={{ width: '100%', border: 'none', background: 'transparent', color: 'var(--text-h)', fontSize: '1.1rem', fontWeight: 'bold', marginTop: '8px', outline: 'none' }} />
           </div>
           <div style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '16px', border: `1px solid ${corP2}` }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: corP2, textTransform: 'uppercase' }}>Renda {parceiro2}</label>
-            <input type="number" value={rendaP2} onChange={e => setRendaP2(e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', border: 'none', background: 'transparent', color: 'var(--text-h)', fontSize: '1.1rem', fontWeight: 'bold', marginTop: '8px', outline: 'none' }} />
+            <input type="text" inputMode="numeric" value={formatMask(rendaP2)} onChange={e => handleRendaChange(e, setRendaP2)} placeholder="0,00" style={{ width: '100%', border: 'none', background: 'transparent', color: 'var(--text-h)', fontSize: '1.1rem', fontWeight: 'bold', marginTop: '8px', outline: 'none' }} />
           </div>
         </div>
 
-        {/* SLIDER DE PERCENTAGEM */}
         <div style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border)', marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text)' }}>DESTINAR PARA LAZER:</span>
@@ -93,7 +101,6 @@ export const OrcamentoModalSalarios = ({
           />
         </div>
 
-        {/* RESULTADO (BALANÇA) */}
         {rendaTotal > 0 && (
           <div style={{ background: 'rgba(138, 43, 226, 0.05)', padding: '24px', borderRadius: '20px', border: '1px solid rgba(138, 43, 226, 0.2)', marginBottom: '32px' }}>
             <div style={{ textAlign: 'center', marginBottom: '20px' }}>

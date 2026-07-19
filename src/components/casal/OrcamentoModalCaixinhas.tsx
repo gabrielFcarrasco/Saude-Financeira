@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore'; // ✨ Importado arrayUnion
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore'; 
 import { db } from '../../services/firebase';
 
 const PALETA_DE_CORES = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e', '#84cc16', '#0ea5e9', '#eab308'];
@@ -39,10 +39,21 @@ export const OrcamentoModalCaixinhas = ({
   const disponivel = limiteMensalLazer - totalAlocado;
   const porcentagemAlocada = limiteMensalLazer > 0 ? Math.min((totalAlocado / limiteMensalLazer) * 100, 100) : 0;
 
+  // ✨ MÁSCARA BANCÁRIA
+  const handleValorCaixinha = (id: string, e: any) => {
+    const numbers = e.target.value.replace(/\D/g, '');
+    const val = numbers ? (parseInt(numbers, 10) / 100).toFixed(2) : 0;
+    atualizarCaixinha(id, 'valor', Number(val));
+  };
+
+  const formatMask = (val: string | number) => {
+    if (!val) return '';
+    return Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   const handleSalvar = async () => {
     setIsProcessando(true);
     try {
-      // ✨ Salvando e Notificando o parceiro das alterações nas categorias!
       await updateDoc(doc(db, 'casais', casalId), { 
         caixinhas: lista,
         notificacoes: arrayUnion({
@@ -115,7 +126,7 @@ export const OrcamentoModalCaixinhas = ({
                        type="text" 
                        value={c.nome} 
                        onChange={e => atualizarCaixinha(c.id, 'nome', e.target.value)} 
-                       placeholder="Ex: Jantares, Comunhão..." 
+                       placeholder="Ex: Jantares..." 
                        style={{ flex: 1, border: 'none', background: 'transparent', color: 'var(--text-h)', fontWeight: 'bold', fontSize: '1.2rem', outline: 'none' }} 
                      />
                      
@@ -130,11 +141,12 @@ export const OrcamentoModalCaixinhas = ({
 
                   <div style={{ background: 'var(--bg)', borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', border: '1px solid var(--border)' }}>
                      <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text)' }}>Orçamento (R$):</span>
+                     {/* ✨ INPUT COM MÁSCARA APLICADA */}
                      <input 
-                       type="number" 
-                       inputMode="decimal" 
-                       value={c.valor || ''} 
-                       onChange={e => atualizarCaixinha(c.id, 'valor', Number(e.target.value))} 
+                       type="text" 
+                       inputMode="numeric" 
+                       value={formatMask(c.valor)} 
+                       onChange={e => handleValorCaixinha(c.id, e)} 
                        placeholder="0,00" 
                        style={{ width: '120px', textAlign: 'right', border: 'none', background: 'transparent', color: 'var(--text-h)', fontSize: '1.3rem', fontWeight: 'bold', outline: 'none' }} 
                      />

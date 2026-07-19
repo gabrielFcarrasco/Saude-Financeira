@@ -15,11 +15,9 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
   const [opacidadeTexto, setOpacidadeTexto] = useState(1);
   const [minTimePassed, setMinTimePassed] = useState(false);
 
-  // ✨ O SEGREDO ESTÁ AQUI: Uma trava que sobrevive às re-renderizações!
   const finalizandoRef = useRef(false);
 
   useEffect(() => {
-    // Garante que a tela fique pelo menos 3.5 segundos para a animação brilhar
     const minTimer = setTimeout(() => {
       setMinTimePassed(true);
     }, 3500);
@@ -27,10 +25,24 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
     return () => clearTimeout(minTimer);
   }, []);
 
+  // ✨ CORREÇÃO APLICADA: O ejetor de segurança foi incluído
+  useEffect(() => {
+    const safetyTimer = setTimeout(() => {
+      if (!finalizandoRef.current) {
+        console.warn("⚠️ Splash ejetado à força para evitar travamento.");
+        finalizandoRef.current = true;
+        setProgress(100);
+        setIsFading(true);
+        setTimeout(onFinish, 600);
+      }
+    }, 10000); 
+
+    return () => clearTimeout(safetyTimer);
+  }, [onFinish]);
+
   useEffect(() => {
     const progressInterval = setInterval(() => {
       setProgress((old) => {
-        // Se ainda não está pronto (IA carregando), trava a barra no 90%
         if (old >= 90 && !isReady) return 90; 
         
         const next = old + Math.random() * 10 + 2;
@@ -54,11 +66,9 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
     };
   }, [isReady]);
 
-  // Vigia quando tudo estiver pronto E o tempo mínimo tiver passado
   useEffect(() => {
-    // ✨ Verifica se já não começou a finalizar antes de disparar o timer!
     if (isReady && minTimePassed && !finalizandoRef.current) {
-      finalizandoRef.current = true; // Trava a porta! Agora ninguém cancela mais.
+      finalizandoRef.current = true; 
       setProgress(100);
       
       setTimeout(() => {
@@ -98,7 +108,6 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
         pointerEvents: isFading ? 'none' : 'auto'
       }}>
         
-        {/* ÍCONE ANIMADO */}
         <div style={{ position: 'relative', marginBottom: '48px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           
           <div style={{
@@ -125,12 +134,10 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
           </div>
         </div>
 
-        {/* TÍTULO */}
         <h2 style={{ margin: '0 0 8px 0', color: 'var(--text-h)', fontSize: '1.8rem', letterSpacing: '-0.5px', fontWeight: 'bold' }}>
           Hub do Casal
         </h2>
         
-        {/* TEXTO DINÂMICO */}
         <p style={{ 
           margin: '0 0 48px 0', 
           color: 'var(--text)', 
@@ -143,7 +150,6 @@ export const SplashScreen = ({ isReady, onFinish }: { isReady: boolean, onFinish
           {FRASES_LOADING[fraseIndex]}
         </p>
 
-        {/* BARRA DE PROGRESSO */}
         <div style={{ width: '200px', height: '4px', background: 'var(--code-bg)', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
           <div style={{
             width: `${progress}%`, height: '100%', 

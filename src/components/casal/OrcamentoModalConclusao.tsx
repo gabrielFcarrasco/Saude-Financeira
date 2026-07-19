@@ -10,6 +10,17 @@ export const OrcamentoModalConclusao = ({
 
   if (!modalConcluir) return null;
 
+  // ✨ MÁSCARA BANCÁRIA
+  const handleMask = (e: any, setter: any) => {
+    const numbers = e.target.value.replace(/\D/g, '');
+    setter(numbers ? (parseInt(numbers, 10) / 100).toFixed(2) : '');
+  };
+
+  const formatMask = (val: string | number) => {
+    if (!val) return '';
+    return Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   return createPortal(
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div className="animate-slide-up" style={{ background: 'var(--bg)', width: '100%', maxWidth: '500px', borderRadius: '32px 32px 0 0', padding: '32px 24px 60px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -35,14 +46,16 @@ export const OrcamentoModalConclusao = ({
               <option value={parceiro1}>{parceiro1} pagou tudo</option>
               <option value={parceiro2}>{parceiro2} pagou tudo</option>
             </select>
+            
             {quemPagouReal === 'ambos' ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                <input type="number" value={valorP1Real} onChange={e => setValorP1Real(e.target.value)} placeholder={`Valor ${parceiro1}`} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)' }} />
-                <input type="number" value={valorP2Real} onChange={e => setValorP2Real(e.target.value)} placeholder={`Valor ${parceiro2}`} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)' }} />
+                <input type="text" inputMode="numeric" value={formatMask(valorP1Real)} onChange={e => handleMask(e, setValorP1Real)} placeholder={`R$ ${parceiro1}`} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', textAlign: 'right', fontWeight: 'bold' }} />
+                <input type="text" inputMode="numeric" value={formatMask(valorP2Real)} onChange={e => handleMask(e, setValorP2Real)} placeholder={`R$ ${parceiro2}`} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', textAlign: 'right', fontWeight: 'bold' }} />
               </div>
             ) : (
-              <input type="number" value={valorRealFinal} onChange={e => setValorRealFinal(e.target.value)} placeholder="Valor total real" style={{ width: '100%', padding: '18px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', fontSize: '1.3rem', fontWeight: 'bold', textAlign: 'center', marginBottom: '24px' }} />
+              <input type="text" inputMode="numeric" value={formatMask(valorRealFinal)} onChange={e => handleMask(e, setValorRealFinal)} placeholder="Valor total real (0,00)" style={{ width: '100%', padding: '18px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', fontSize: '1.3rem', fontWeight: 'bold', textAlign: 'center', marginBottom: '24px' }} />
             )}
+            
             <button onClick={() => processarFim(false)} disabled={isProcessando} style={{ width: '100%', padding: '20px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold' }}>Confirmar Valor</button>
           </div>
         )}
