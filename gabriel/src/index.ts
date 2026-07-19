@@ -1,32 +1,115 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
 
-import {setGlobalOptions} from "firebase-functions";
-import {onRequest} from "firebase-functions/https";
-import * as logger from "firebase-functions/logger";
+// Inicializa o Admin SDK para podermos enviar o Push
+admin.initializeApp();
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+export const notificarParceiro = onDocumentUpdated("casais/{casalId}", async (event) => {
+  // Na V2, os dados vêm dentro do objeto "event.data"
+  if (!event.data) {
+      console.log("Nenhum dado encontrado no evento.");
+      return;
+  }
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+  const antes = event.data.before.data();
+  const depois = event.data.after.data();
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+  const notifsAntes = antes.notificacoes || [];
+  const notifsDepois = depois.notificacoes || [];
+
+  // Se a lista de notificações não cresceu, encerra a função
+  if (notifsDepois.length <= notifsAntes.length) return;
+
+  // Pega a última notificação da array
+  const novaNotificacao = notifsDepois[notifsDepois.length - 1];
+  
+  let tokenDestino = null;
+
+  // Lógica para descobrir de quem é o celular que vai receber o Push
+  if (novaNotificacao.texto.includes(depois.nomeP1)) {
+      tokenDestino = depois[`token_${depois.nomeP2}`];
+  } else if (novaNotificacao.texto.includes(depois.nomeP2)) {
+      tokenDestino = depois[`token_${depois.nomeP1}`];
+  }
+
+  if (!tokenDestino) {
+      console.log("Token de destino não encontrado no banco.");
+      return;
+  }
+
+  // Monta a notificação visual
+  const payload = {
+    notification: {
+      title: 'Hub do Casal 💖',
+      body: novaNotificacao.texto,
+    }
+  };
+
+  // Dispara a notificação via Firebase Admin
+  try {
+      await admin.messaging().send({
+          token: tokenDestino,
+          notification: payload.notification
+      });
+      console.log("Push Notification disparada com sucesso!");
+  } catch (error) {
+      console.error("Erro ao enviar push:", error);
+  }
+});import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
+
+// Inicializa o Admin SDK para podermos enviar o Push
+admin.initializeApp();
+
+export const notificarParceiro = onDocumentUpdated("casais/{casalId}", async (event) => {
+  // Na V2, os dados vêm dentro do objeto "event.data"
+  if (!event.data) {
+      console.log("Nenhum dado encontrado no evento.");
+      return;
+  }
+
+  const antes = event.data.before.data();
+  const depois = event.data.after.data();
+
+  const notifsAntes = antes.notificacoes || [];
+  const notifsDepois = depois.notificacoes || [];
+
+  // Se a lista de notificações não cresceu, encerra a função
+  if (notifsDepois.length <= notifsAntes.length) return;
+
+  // Pega a última notificação da array
+  const novaNotificacao = notifsDepois[notifsDepois.length - 1];
+  
+  let tokenDestino = null;
+
+  // Lógica para descobrir de quem é o celular que vai receber o Push
+  if (novaNotificacao.texto.includes(depois.nomeP1)) {
+      tokenDestino = depois[`token_${depois.nomeP2}`];
+  } else if (novaNotificacao.texto.includes(depois.nomeP2)) {
+      tokenDestino = depois[`token_${depois.nomeP1}`];
+  }
+
+  if (!tokenDestino) {
+      console.log("Token de destino não encontrado no banco.");
+      return;
+  }
+
+  // Monta a notificação visual
+  const payload = {
+    notification: {
+      title: 'Hub do Casal 💖',
+      body: novaNotificacao.texto,
+    }
+  };
+
+  // Dispara a notificação via Firebase Admin
+  try {
+      await admin.messaging().send({
+          token: tokenDestino,
+          notification: payload.notification
+      });
+      console.log("Push Notification disparada com sucesso!");
+  } catch (error) {
+      console.error("Erro ao enviar push:", error);
+  }
+});
