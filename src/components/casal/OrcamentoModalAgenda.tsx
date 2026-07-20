@@ -21,10 +21,25 @@ export const OrcamentoModalAgenda = ({
     const buscarFeriados = async () => {
       try {
         const anoBusca = dataVisualizada.getFullYear();
-        const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${anoBusca}`);
+                const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${anoBusca}`);
         if (response.ok) {
           const data = await response.json();
-          setFeriados(data);
+          
+          // 1. Criamos o feriado estadual usando a variável anoBusca
+          const feriadoSP = {
+            date: `${anoBusca}-07-09`,
+            name: 'Revolução Constitucionalista (SP)',
+            type: 'state'
+          };
+
+          // 2. Juntamos a lista nacional com o feriado de SP
+          const todosOsFeriados = [...data, feriadoSP];
+
+          // 3. Ordenamos a lista pela data para o 9 de Julho ficar na posição certa
+          todosOsFeriados.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          // 4. Salvamos a lista completa no estado
+          setFeriados(todosOsFeriados);
         }
       } catch (error) {
         console.error("Erro ao buscar feriados:", error);
