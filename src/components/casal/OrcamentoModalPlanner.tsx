@@ -10,9 +10,8 @@ export const OrcamentoModalPlanner = ({
   
   if (!simuladorAberto) return null;
 
-  // ✨ FUNÇÃO DA MÁSCARA BANCÁRIA
   const handleItemValue = (id: number, e: any) => {
-    const numbers = e.target.value.replace(/\D/g, ''); // Remove tudo que não é número
+    const numbers = e.target.value.replace(/\D/g, ''); 
     const val = numbers ? (parseInt(numbers, 10) / 100).toFixed(2) : '';
     setSimItems(simItems.map((i:any) => i.id === id ? { ...i, valor: val } : i));
   };
@@ -20,6 +19,10 @@ export const OrcamentoModalPlanner = ({
   const formatMask = (val: string | number) => {
     if (!val) return '';
     return Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const removerItem = (idParaRemover: number) => {
+    setSimItems(simItems.filter((item: any) => item.id !== idParaRemover));
   };
 
   const totalSimulacao = simItems.reduce((acc: number, curr: any) => acc + Number(curr.valor || 0), 0);
@@ -48,42 +51,60 @@ export const OrcamentoModalPlanner = ({
         
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-h)', fontWeight: 'bold' }}>ITENS DO CUSTO</span>
+          
           {simItems.map((item: any) => (
-            <div key={item.id} style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '20px', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-                <input type="text" value={item.nome} onChange={e => setSimItems(simItems.map((i:any) => i.id === item.id ? { ...i, nome: e.target.value } : i))} placeholder="Ex: Combustível" style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', outline: 'none', color: 'var(--text-h)' }} />
+            <div key={item.id} className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '20px', marginBottom: '12px', border: '1px solid var(--border)' }}>
+              
+              {/* ✨ Ajustei o alignItems: 'center' e mudei o botão da lixeira aqui */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center' }}>
+                <input type="text" value={item.nome} onChange={e => setSimItems(simItems.map((i:any) => i.id === item.id ? { ...i, nome: e.target.value } : i))} placeholder="Ex: Ingressos" style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', outline: 'none', color: 'var(--text-h)' }} />
                 
-                {/* ✨ INPUT COM MÁSCARA APLICADA */}
                 <input 
                   type="text" 
                   inputMode="numeric"
                   value={formatMask(item.valor)} 
                   onChange={e => handleItemValue(item.id, e)} 
                   placeholder="0,00" 
-                  style={{ width: '110px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', outline: 'none', color: 'var(--text-h)', fontWeight: 'bold', textAlign: 'right' }} 
+                  style={{ width: '90px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', outline: 'none', color: 'var(--text-h)', fontWeight: 'bold', textAlign: 'right' }} 
                 />
+                
+                <button 
+                  onClick={() => removerItem(item.id)} 
+                  style={{ background: 'transparent', border: 'none', padding: '0 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: '0.2s' }}
+                  title="Remover Item"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                </button>
               </div>
+
               <div style={{ display: 'flex', gap: '8px' }}>
                 {['ambos', 'p1', 'p2'].map(opt => (
-                  <button key={opt} onClick={() => setSimItems(simItems.map((i:any) => i.id === item.id ? { ...i, responsavel: opt } : i))} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '0.8rem', border: 'none', background: item.responsavel === opt ? 'var(--accent)' : 'var(--bg)', color: item.responsavel === opt ? '#fff' : 'var(--text)', fontWeight: 'bold' }}>
+                  <button key={opt} onClick={() => setSimItems(simItems.map((i:any) => i.id === item.id ? { ...i, responsavel: opt } : i))} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '0.8rem', border: 'none', background: item.responsavel === opt ? 'var(--accent)' : 'var(--bg)', color: item.responsavel === opt ? '#fff' : 'var(--text)', fontWeight: 'bold', cursor: 'pointer' }}>
                     {opt === 'ambos' ? 'Dividir' : opt === 'p1' ? parceiro1 : parceiro2}
                   </button>
                 ))}
               </div>
             </div>
           ))}
-          <button onClick={() => setSimItems([...simItems, { id: Date.now(), nome: '', valor: '', responsavel: 'ambos' }])} style={{ width: '100%', padding: '16px', background: 'transparent', border: '2px dashed var(--border)', color: 'var(--text)', borderRadius: '16px', fontWeight: 'bold', cursor: 'pointer' }}>+ Adicionar Item</button>
+          
+          <button onClick={() => setSimItems([...simItems, { id: Date.now(), nome: '', valor: '', responsavel: 'ambos' }])} style={{ width: '100%', padding: '16px', background: 'transparent', border: '2px dashed var(--border)', color: 'var(--text)', borderRadius: '16px', fontWeight: 'bold', cursor: 'pointer' }}>
+            + Adicionar Item
+          </button>
         </div>
 
         <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
           <button onClick={() => setSimuladorAberto(false)} style={{ flex: 1, padding: '18px', borderRadius: '16px', background: 'var(--code-bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', cursor: 'pointer' }}>Cancelar</button>
           
-          {/* ✨ BOTÃO DINÂMICO (Com ou Sem Valor) */}
           <button onClick={handleSalvarPlano} disabled={isProcessando || !simTitulo} style={{ flex: 2, padding: '18px', borderRadius: '16px', background: (isProcessando || !simTitulo) ? 'var(--bg)' : 'var(--accent)', color: (isProcessando || !simTitulo) ? 'var(--text)' : '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>
             {isProcessando ? 'Salvando...' : (totalSimulacao === 0 ? 'Agendar s/ Valor' : 'Salvar Passeio')}
           </button>
         </div>
-        {idEdicao && <button onClick={() => handleExcluirPlano(idEdicao)} style={{ width: '100%', marginTop: '16px', background: 'transparent', border: 'none', color: '#ef4444', fontWeight: 'bold', cursor: 'pointer' }}>Apagar Plano</button>}
+        
+        {idEdicao && (
+          <button onClick={() => handleExcluirPlano(idEdicao)} style={{ width: '100%', marginTop: '16px', background: 'transparent', border: 'none', color: '#ef4444', fontWeight: 'bold', cursor: 'pointer' }}>
+            Apagar Plano
+          </button>
+        )}
       </div>
     </div>,
     document.body

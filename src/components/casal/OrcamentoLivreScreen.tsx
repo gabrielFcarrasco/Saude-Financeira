@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { doc, updateDoc, addDoc, collection, serverTimestamp, deleteDoc, query, getDocs, onSnapshot, arrayUnion } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { enviarMensagemParaGemini } from '../../services/gemini';
@@ -27,11 +28,9 @@ export const OrcamentoLivreScreen = ({
   const [agendaAberto, setAgendaAberto] = useState(false);
   const [agendaP1, setAgendaP1] = useState<string[]>([]);
   const [agendaP2, setAgendaP2] = useState<string[]>([]);
-  
   const [alfabetoConfig, setAlfabetoConfig] = useState<any>(null);
 
   const [assistenteAberto, setAssistenteAberto] = useState(false);
-
   const [simuladorAberto, setSimuladorAberto] = useState(false);
   const [idEdicao, setIdEdicao] = useState<string | null>(null);
   const [simTitulo, setSimTitulo] = useState('');
@@ -47,6 +46,11 @@ export const OrcamentoLivreScreen = ({
   const [valorP1Real, setValorP1Real] = useState('');
   const [valorP2Real, setValorP2Real] = useState('');
   const [sobraDetectada, setSobraDetectada] = useState(0);
+
+  const [avisoPendenciasAberto, setAvisoPendenciasAberto] = useState(false);
+  const [jaAvisouPendencias, setJaAvisouPendencias] = useState(false);
+
+  const [saidaParaReabrir, setSaidaParaReabrir] = useState<any | null>(null);
 
   useEffect(() => {
     if (!casalId) return;
@@ -72,24 +76,50 @@ export const OrcamentoLivreScreen = ({
   const diasParaRenovar = new Date(anoAtualNum, mesAtualNum + 1, 0).getDate() - hoje.getDate() + 1;
   const dataHojeStr = hoje.toISOString().split('T')[0];
 
-  const saidasMesAtual: any[] = [];
+  const saidasMesAtualReais: any[] = [];
+  const pendenciasPassadas: any[] = [];
   const saidasHistorico: any[] = [];
 
   saidas.forEach((saida: any) => {
     let isMesAtual = true;
+    let isPassado = false;
+    
     if (saida.dataRaw) {
       const [anoStr, mesStr] = saida.dataRaw.split('-');
-      if (parseInt(anoStr) !== anoAtualNum || parseInt(mesStr) - 1 !== mesAtualNum) isMesAtual = false;
+      const anoS = parseInt(anoStr);
+      const mesS = parseInt(mesStr) - 1;
+
+      if (anoS < anoAtualNum || (anoS === anoAtualNum && mesS < mesAtualNum)) {
+        isMesAtual = false;
+        isPassado = true;
+      } else if (anoS > anoAtualNum || (anoS === anoAtualNum && mesS > mesAtualNum)) {
+        isMesAtual = false; 
+      }
     }
-    if (isMesAtual) saidasMesAtual.push(saida);
-    else saidasHistorico.push(saida);
+
+    if (isMesAtual) {
+      saidasMesAtualReais.push(saida);
+    } else if (isPassado && saida.status === 'planejado') {
+      pendenciasPassadas.push({ ...saida, isPendenciaPassada: true });
+    } else if (isPassado && saida.status === 'concluido') {
+      saidasHistorico.push(saida);
+    }
   });
+
+  const saidasMesAtualVisual = [...pendenciasPassadas, ...saidasMesAtualReais];
+
+  useEffect(() => {
+    if (pendenciasPassadas.length > 0 && !jaAvisouPendencias) {
+      setAvisoPendenciasAberto(true);
+      setJaAvisouPendencias(true);
+    }
+  }, [pendenciasPassadas.length, jaAvisouPendencias]);
 
   let gastoP1 = 0; let gastoP2 = 0;
   const gastosPorCaixinha: Record<string, number> = {};
   caixinhasValidas.forEach((c: any) => gastosPorCaixinha[c.id] = 0);
 
-  saidasMesAtual.forEach((s: any) => {
+  saidasMesAtualReais.forEach((s: any) => {
     let gastoSaida = 0;
     if (s.status === 'concluido' && s.splitReal) {
       gastoP1 += s.splitReal.p1 || 0; gastoP2 += s.splitReal.p2 || 0;
@@ -130,19 +160,13 @@ export const OrcamentoLivreScreen = ({
         const textoLimpo = resposta.replace(/^"|"$/g, '');
         
         if (isMounted && textoLimpo) {
-          await updateDoc(doc(db, 'casais', casalId), {
-            dicaLazerData: dataHojeStr,
-            dicaLazerTexto: textoLimpo
-          });
+          await updateDoc(doc(db, 'casais', casalId), { dicaLazerData: dataHojeStr, dicaLazerTexto: textoLimpo });
         }
       } catch (e) { }
     };
     
-    if (dicaDataFirebase !== '' && dicaDataFirebase !== dataHojeStr) {
-      gerenciarDicaDiaria();
-    } else if (dicaDataFirebase === '') {
-      gerenciarDicaDiaria();
-    }
+    if (dicaDataFirebase !== '' && dicaDataFirebase !== dataHojeStr) gerenciarDicaDiaria();
+    else if (dicaDataFirebase === '') gerenciarDicaDiaria();
 
     return () => { isMounted = false; };
   }, [casalId, limiteMensalLazer, gastoEPlanejado, diasParaRenovar, dicaDataFirebase, dataHojeStr]); 
@@ -155,23 +179,20 @@ export const OrcamentoLivreScreen = ({
   };
 
   const abrirNovoPlanoComData = (dataStr: string, tituloSugerido: string = '') => {
-    setIdEdicao(null); 
-    setSimTitulo(tituloSugerido); 
-    setSimData(dataStr); 
+    setIdEdicao(null); setSimTitulo(tituloSugerido); setSimData(dataStr); 
     setSimItems([{ id: Date.now(), nome: '', valor: '', responsavel: 'ambos' }]);
     setSimCaixinha(caixinhasValidas[0].id);
     setSimuladorAberto(true);
   };
 
-  const abrirEdicao = (plano: any, e: any) => {
-    e.stopPropagation();
+  const abrirEdicao = (plano: any, e?: any) => {
+    if (e) e.stopPropagation();
     setIdEdicao(plano.id); setSimTitulo(plano.titulo); setSimData(plano.dataRaw || ''); 
     setSimItems(plano.itens || []);
     setSimCaixinha(plano.caixinhaId || caixinhasValidas[0].id);
     setSimuladorAberto(true);
   };
 
-  // ✨ ATUALIZADO: Agora permite salvar mesmo com valor ZERO!
   const handleSalvarPlano = async () => {
     if (!casalId || !simTitulo) return; 
     try {
@@ -185,22 +206,12 @@ export const OrcamentoLivreScreen = ({
       if (idEdicao) {
         await updateDoc(doc(db, 'casais', casalId, 'saidas', idEdicao), dados);
         await updateDoc(doc(db, 'casais', casalId), {
-          notificacoes: arrayUnion({
-            id: Date.now().toString(),
-            texto: `${meuNome} alterou os detalhes do rolê "${simTitulo}"!`,
-            lida: false,
-            createdAt: new Date().toISOString()
-          })
+          notificacoes: arrayUnion({ id: Date.now().toString(), texto: `${meuNome} alterou os detalhes do rolê "${simTitulo}"!`, lida: false, createdAt: new Date().toISOString() })
         });
       } else {
         await addDoc(collection(db, 'casais', casalId, 'saidas'), { ...dados, createdAt: serverTimestamp() });
         await updateDoc(doc(db, 'casais', casalId), {
-          notificacoes: arrayUnion({
-            id: Date.now().toString(),
-            texto: `${meuNome} marcou um novo passeio: "${simTitulo}" para o dia ${dataFormatada}!`,
-            lida: false,
-            createdAt: new Date().toISOString()
-          })
+          notificacoes: arrayUnion({ id: Date.now().toString(), texto: `${meuNome} marcou um novo passeio: "${simTitulo}" para o dia ${dataFormatada}!`, lida: false, createdAt: new Date().toISOString() })
         });
       }
       setSimuladorAberto(false);
@@ -213,21 +224,35 @@ export const OrcamentoLivreScreen = ({
     catch (error) {} finally { setIsProcessando(false); }
   };
 
-  const handleReabrirPasseio = async (saida: any, e: any) => {
+  const handleReabrirPasseio = (saida: any, e: any) => {
     e.stopPropagation();
-    if (!window.confirm(`Deseja reabrir "${saida.titulo}" para correção? Isso removerá a cobrança atual.`)) return;
+    setSaidaParaReabrir(saida);
+  };
+
+  const confirmarReabrirPasseio = async () => {
+    if (!saidaParaReabrir || !casalId) return;
     try {
       setIsProcessando(true);
       const q = query(collection(db, 'casais', casalId, 'despesas_rapidas'));
       const querySnapshot = await getDocs(q);
       const deletarPromises: any[] = [];
       querySnapshot.forEach((despesaDoc) => {
-        if (despesaDoc.data().desc?.includes(saida.titulo)) deletarPromises.push(deleteDoc(doc(db, 'casais', casalId, 'despesas_rapidas', despesaDoc.id)));
+        if (despesaDoc.data().desc?.includes(saidaParaReabrir.titulo)) {
+            deletarPromises.push(deleteDoc(doc(db, 'casais', casalId, 'despesas_rapidas', despesaDoc.id)));
+        }
       });
       await Promise.all(deletarPromises);
-      await updateDoc(doc(db, 'casais', casalId, 'saidas', saida.id), { status: 'planejado' });
-      abrirEdicao(saida, e);
-    } catch (error) { alert("Erro ao reabrir o passeio."); } finally { setIsProcessando(false); }
+      await updateDoc(doc(db, 'casais', casalId, 'saidas', saidaParaReabrir.id), { status: 'planejado' });
+      
+      const saidaTemp = saidaParaReabrir;
+      setSaidaParaReabrir(null); 
+      abrirEdicao(saidaTemp); 
+
+    } catch (error) { 
+      alert("Erro ao reabrir o passeio."); 
+    } finally { 
+      setIsProcessando(false); 
+    }
   };
 
   const prepararConclusao = (saida: any, e: any) => {
@@ -268,12 +293,7 @@ export const OrcamentoLivreScreen = ({
       if (v2 > 0) await addDoc(collection(db, 'casais', casalId, 'despesas_rapidas'), { desc: v1 > 0 ? `${modalConcluir.titulo} (${parceiro2})` : modalConcluir.titulo, pagoPor: parceiro2, valor: v2, data: 'Hoje', createdAt: serverTimestamp() });
       
       await updateDoc(doc(db, 'casais', casalId), {
-        notificacoes: arrayUnion({
-          id: Date.now().toString(),
-          texto: `${meuNome} marcou o rolê "${modalConcluir.titulo}" como concluído!`,
-          lida: false,
-          createdAt: new Date().toISOString()
-        })
+        notificacoes: arrayUnion({ id: Date.now().toString(), texto: `${meuNome} marcou o rolê "${modalConcluir.titulo}" como concluído!`, lida: false, createdAt: new Date().toISOString() })
       });
 
       const diferenca = modalConcluir.estimado - valorGastoEfetivo;
@@ -298,21 +318,73 @@ export const OrcamentoLivreScreen = ({
 
       {!simuladorAberto && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
-          <button onClick={abrirNovoPlano} style={{ width: '100%', padding: '16px', borderRadius: '20px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '0.95rem', boxShadow: '0 4px 15px rgba(138, 43, 226, 0.3)' }}>
+          <button onClick={abrirNovoPlano} style={{ width: '100%', padding: '16px', borderRadius: '20px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '0.95rem', boxShadow: '0 4px 15px rgba(138, 43, 226, 0.3)', cursor: 'pointer' }}>
             + Novo Passeio
           </button>
-          <button onClick={() => setAgendaAberto(true)} style={{ width: '100%', padding: '16px', borderRadius: '20px', background: '#f59e0b', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '0.95rem', boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)' }}>
+          <button onClick={() => setAgendaAberto(true)} style={{ width: '100%', padding: '16px', borderRadius: '20px', background: '#f59e0b', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '0.95rem', boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)', cursor: 'pointer' }}>
             📅 Ver Agendas
           </button>
         </div>
       )}
 
       <OrcamentoListas
-        saidasMesAtual={saidasMesAtual} saidasHistorico={saidasHistorico} saidaExpandida={saidaExpandida} setSaidaExpandida={setSaidaExpandida}
+        saidasMesAtual={saidasMesAtualVisual} saidasHistorico={saidasHistorico} saidaExpandida={saidaExpandida} setSaidaExpandida={setSaidaExpandida}
         formatMoney={formatMoney} parceiro1={parceiro1} parceiro2={parceiro2} isProcessando={isProcessando}
         abrirEdicao={abrirEdicao} prepararConclusao={prepararConclusao} handleReabrirPasseio={handleReabrirPasseio}
         caixinhasValidas={caixinhasValidas}
       />
+
+      {/* ✨ Modal injetado direto no body para travar bem no meio da tela */}
+      {avisoPendenciasAberto && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '32px 24px', width: '100%', maxWidth: '360px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', border: '1px solid #f59e0b' }}>
+            <div style={{ marginBottom: '16px', color: '#f59e0b', display: 'flex', justifyContent: 'center' }}>
+               <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            </div>
+            <h3 style={{ margin: '0 0 12px 0', color: 'var(--text-h)' }}>Existem Pendências!</h3>
+            <p style={{ color: 'var(--text)', marginBottom: '12px', fontSize: '0.9rem', lineHeight: '1.5' }}>
+              Vocês têm <strong>{pendenciasPassadas.length}</strong> passeio(s) de meses anteriores que ainda estão em aberto.
+            </p>
+            <p style={{ color: 'var(--text)', marginBottom: '32px', fontSize: '0.8rem', lineHeight: '1.5', fontStyle: 'italic' }}>
+              Finalizem ou apaguem esses planos para fechar o ciclo. <strong>Fiquem tranquilos: eles não vão afetar o caixa deste mês!</strong>
+            </p>
+            <button onClick={() => setAvisoPendenciasAberto(false)} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: '#f59e0b', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer' }}>
+              Entendido, vou organizar!
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ✨ Modal injetado direto no body para travar bem no meio da tela */}
+      {saidaParaReabrir && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '32px 24px', width: '100%', maxWidth: '360px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', border: '1px solid #ef4444' }}>
+            
+            <div style={{ marginBottom: '16px', color: '#ef4444', display: 'flex', justifyContent: 'center' }}>
+               <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </div>
+            
+            <h3 style={{ margin: '0 0 12px 0', color: 'var(--text-h)' }}>Reabrir Passeio?</h3>
+            <p style={{ color: 'var(--text)', marginBottom: '12px', fontSize: '0.9rem', lineHeight: '1.5' }}>
+              Deseja reabrir <strong>"{saidaParaReabrir.titulo}"</strong> para ajustes?
+            </p>
+            <p style={{ color: 'var(--text)', marginBottom: '32px', fontSize: '0.8rem', lineHeight: '1.5', fontStyle: 'italic' }}>
+              Isso vai <strong>desfazer</strong> a cobrança que foi gerada na divisão de gastos deste passeio.
+            </p>
+            
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button onClick={() => setSaidaParaReabrir(null)} disabled={isProcessando} style={{ flex: 1, padding: '16px', borderRadius: '16px', background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '0.95rem', cursor: 'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={confirmarReabrirPasseio} disabled={isProcessando} style={{ flex: 1, padding: '16px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 'bold', fontSize: '0.95rem', cursor: 'pointer' }}>
+                {isProcessando ? 'Aguarde...' : 'Reabrir'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       <OrcamentoModalPlanner
         simuladorAberto={simuladorAberto} setSimuladorAberto={setSimuladorAberto} isProcessando={isProcessando}
@@ -346,7 +418,7 @@ export const OrcamentoLivreScreen = ({
         agendaP1={agendaP1} agendaP2={agendaP2} currentUserRole={currentUserRole}
         parceiro1={parceiro1} parceiro2={parceiro2} corP1={corP1} corP2={corP2} meuNome={meuNome}
         abrirNovoPlanoComData={abrirNovoPlanoComData}
-        saidasMesAtual={saidasMesAtual} 
+        saidasMesAtual={saidasMesAtualVisual} 
         alfabetoConfig={alfabetoConfig} 
       />
 
@@ -355,7 +427,7 @@ export const OrcamentoLivreScreen = ({
         casalId={casalId} parceiro1={parceiro1} parceiro2={parceiro2}
         limiteMensalLazer={limiteMensalLazer} gastoEPlanejado={gastoEPlanejado}
         caixinhasValidas={caixinhasValidas} gastosPorCaixinha={gastosPorCaixinha}
-        saidasMesAtual={saidasMesAtual} formatMoney={formatMoney}
+        saidasMesAtual={saidasMesAtualVisual} formatMoney={formatMoney}
       />
 
       <div className="scroll-spacer"></div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { collection, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
@@ -9,6 +10,9 @@ export const MetasScreen = ({
   const [criandoMeta, setCriandoMeta] = useState(false);
   const [editandoMeta, setEditandoMeta] = useState(false);
   const [isProcessando, setIsProcessando] = useState(false);
+
+  // ✨ NOVO: Estado para controlar o modal de exclusão
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
 
   // Form de Novo Sonho
   const [novaMetaTitulo, setNovaMetaTitulo] = useState('');
@@ -74,14 +78,20 @@ export const MetasScreen = ({
     }
   };
 
-  const handleExcluirMeta = async () => {
-    const confirmacao = window.confirm("Tem certeza que deseja excluir esse Sonho? O dinheiro registrado nele ainda continuará no Saldo Conjunto, mas o histórico da meta será apagado.");
-    if (!confirmacao || !casalId || !metaSelecionada) return;
+  // ✨ NOVO: Agora só abre o modal, não usa mais o window.confirm
+  const abrirConfirmacaoExclusao = () => {
+    setConfirmandoExclusao(true);
+  };
+
+  // ✨ NOVO: A lógica de deletar de fato foi movida para cá
+  const confirmarExclusao = async () => {
+    if (!casalId || !metaSelecionada) return;
 
     try {
       setIsProcessando(true);
       await deleteDoc(doc(db, 'casais', casalId, 'metas', metaSelecionada.id));
       setMetaSelecionada(null);
+      setConfirmandoExclusao(false);
     } catch (error) {
       console.error("Erro ao excluir o sonho:", error);
     } finally {
@@ -135,7 +145,9 @@ export const MetasScreen = ({
                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                   <button type="button" onClick={() => setEditandoMeta(false)} disabled={isProcessando} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Cancelar</button>
                   <button type="submit" disabled={isProcessando} style={{ flex: 1, padding: '10px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>{isProcessando ? 'Salvando...' : 'Salvar'}</button>
-                  <button type="button" onClick={handleExcluirMeta} disabled={isProcessando} style={{ padding: '10px 16px', background: '#ef4444', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Excluir Sonho</button>
+                  
+                  {/* ✨ NOVO: Botão dispara a abertura do modal customizado */}
+                  <button type="button" onClick={abrirConfirmacaoExclusao} disabled={isProcessando} style={{ padding: '10px 16px', background: '#ef4444', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Excluir Sonho</button>
                 </div>
               </div>
             </form>
@@ -179,6 +191,42 @@ export const MetasScreen = ({
               <p style={{ margin: '8px 0 0 0', fontSize: '0.85rem', color: 'var(--text)' }}>Use o Acelerador, guarde a sobra do Lazer ou faça um Depósito Direto pelo Hub para começar.</p>
             </div>
           )}
+
+          {/* ✨ NOVO MODAL CUSTOMIZADO: Confirmação de Exclusão injetado no body */}
+          {confirmandoExclusao && createPortal(
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+              <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '32px 24px', width: '100%', maxWidth: '360px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', border: '1px solid #ef4444' }}>
+                
+                <div style={{ marginBottom: '16px', color: '#ef4444', display: 'flex', justifyContent: 'center' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                  </svg>
+                </div>
+                
+                <h3 style={{ margin: '0 0 12px 0', color: 'var(--text-h)' }}>Excluir este Sonho?</h3>
+                <p style={{ color: 'var(--text)', marginBottom: '12px', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                  Tem certeza que deseja apagar o sonho <strong>"{metaSelecionada.titulo}"</strong>?
+                </p>
+                <p style={{ color: 'var(--text)', marginBottom: '32px', fontSize: '0.8rem', lineHeight: '1.5', fontStyle: 'italic' }}>
+                  O dinheiro já guardado <strong>continuará no Saldo Conjunto</strong>, mas o histórico dessa meta será apagado para sempre.
+                </p>
+                
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button onClick={() => setConfirmandoExclusao(false)} disabled={isProcessando} style={{ flex: 1, padding: '16px', borderRadius: '16px', background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '0.95rem', cursor: 'pointer' }}>
+                    Cancelar
+                  </button>
+                  <button onClick={confirmarExclusao} disabled={isProcessando} style={{ flex: 1, padding: '16px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 'bold', fontSize: '0.95rem', cursor: 'pointer' }}>
+                    {isProcessando ? 'Apagando...' : 'Excluir'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
         </div>
       </div>
     );

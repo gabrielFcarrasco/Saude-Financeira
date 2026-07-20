@@ -1,6 +1,5 @@
 import React from 'react';
 
-// ✨ Motor Dinâmico de Ícones com o Avião incluído
 const getIcon = (name: string, size: number = 20) => {
   const props = { xmlns: "http://www.w3.org/2000/svg", width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   switch (name) {
@@ -41,24 +40,62 @@ export const OrcamentoListas = ({
     );
   };
 
+  // ✨ ORDENAÇÃO DO MÊS: Planejados primeiro, depois por data decrescente (ex: dia 31 primeiro, dia 1 por último)
+  const sortedSaidasMes = [...saidasMesAtual].sort((a: any, b: any) => {
+    if (a.status === 'planejado' && b.status !== 'planejado') return -1;
+    if (a.status !== 'planejado' && b.status === 'planejado') return 1;
+    const dateA = new Date(a.dataRaw || '1970-01-01').getTime();
+    const dateB = new Date(b.dataRaw || '1970-01-01').getTime();
+    return dateB - dateA;
+  });
+
+  // ✨ AGRUPAMENTO DO HISTÓRICO: Separando por meses
+  const historicoAgrupado = saidasHistorico.reduce((acc: any, saida: any) => {
+    if (!saida.dataRaw) return acc;
+    const [ano, mes] = saida.dataRaw.split('-');
+    const data = new Date(Number(ano), Number(mes) - 1, 1);
+    const mesNomeRaw = data.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const mesNome = mesNomeRaw.charAt(0).toUpperCase() + mesNomeRaw.slice(1);
+    
+    if (!acc[mesNome]) acc[mesNome] = [];
+    acc[mesNome].push(saida);
+    return acc;
+  }, {});
+
+  // Ordena os meses do histórico do mais recente para o mais antigo
+  const sortedMesesKeys = Object.keys(historicoAgrupado).sort((a, b) => {
+    const dateA = new Date(historicoAgrupado[a][0].dataRaw).getTime();
+    const dateB = new Date(historicoAgrupado[b][0].dataRaw).getTime();
+    return dateB - dateA;
+  });
+
   return (
     <>
       <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-h)', fontSize: '1.1rem' }}>Passeios do Mês</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {saidasMesAtual.map((saida: any) => {
+        {sortedSaidasMes.map((saida: any) => {
           const isExpandido = saidaExpandida === saida.id;
+          const isPendenteAntigo = saida.isPendenciaPassada; // A flag que criamos no outro arquivo
+
           return (
-            <div key={saida.id} onClick={() => setSaidaExpandida(isExpandido ? null : saida.id)} style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: `1px solid ${saida.status === 'concluido' ? 'rgba(16, 185, 129, 0.3)' : 'var(--border)'}`, cursor: 'pointer', transition: '0.2s', boxShadow: isExpandido ? '0 8px 24px rgba(0,0,0,0.04)' : '0 2px 8px rgba(0,0,0,0.02)' }}>
+            <div key={saida.id} onClick={() => setSaidaExpandida(isExpandido ? null : saida.id)} style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: `1px solid ${saida.status === 'concluido' ? 'rgba(16, 185, 129, 0.3)' : (isPendenteAntigo ? '#f59e0b' : 'var(--border)')}`, cursor: 'pointer', transition: '0.2s', boxShadow: isExpandido ? '0 8px 24px rgba(0,0,0,0.04)' : '0 2px 8px rgba(0,0,0,0.02)' }}>
               
+              {/* ✨ TAG DE PENDÊNCIA SE FOR ANTIGO */}
+              {isPendenteAntigo && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', fontSize: '0.7rem', fontWeight: 'bold', padding: '4px 10px', borderRadius: '8px', display: 'inline-flex', marginBottom: '12px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                  ⚠️ PENDÊNCIA (Ciclo Anterior)
+                </div>
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {saida.status === 'concluido' ? <StatusCheck color="#10b981" /> : <StatusClock color="var(--text)" />}
+                  {saida.status === 'concluido' ? <StatusCheck color="#10b981" /> : <StatusClock color={isPendenteAntigo ? '#f59e0b' : 'var(--text)'} />}
                   <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>
                     {saida.titulo}
                   </h4>
                 </div>
                 <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem', color: saida.status === 'concluido' ? '#10b981' : 'var(--text-h)' }}>
-                  {formatMoney(saida.estimado)}
+                  {saida.estimado === 0 ? '--' : formatMoney(saida.estimado)}
                 </div>
               </div>
               
@@ -75,7 +112,7 @@ export const OrcamentoListas = ({
                     saida.itens.map((item: any, index: number) => (
                       <div key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '8px', color: 'var(--text-h)' }}>
                         <span>• {item.nome || 'Item'} <span style={{fontSize: '0.7rem', color: 'var(--text)'}}>({item.responsavel === 'ambos' ? 'Dividido' : item.responsavel === 'p1' ? parceiro1 : parceiro2})</span></span>
-                        <span style={{ fontWeight: 'bold' }}>{formatMoney(Number(item.valor))}</span>
+                        <span style={{ fontWeight: 'bold' }}>{item.valor === 0 || item.valor === "0.00" ? '--' : formatMoney(Number(item.valor))}</span>
                       </div>
                     ))
                   ) : (
@@ -111,25 +148,38 @@ export const OrcamentoListas = ({
         })}
       </div>
 
-      {saidasHistorico.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '40px' }}>
-          <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-h)', fontSize: '1.1rem' }}>Histórico Antigo</h3>
-          {saidasHistorico.map((saida: any) => (
-            <div key={saida.id} style={{ background: 'var(--bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', opacity: 0.8 }}>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <StatusCheck color="#10b981" />
-                  <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.05rem' }}>{saida.titulo}</h4>
-                </div>
-                <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--text-h)', fontSize: '1.1rem' }}>
-                  {formatMoney(saida.estimado)}
-                </div>
+      {/* ✨ HISTÓRICO AGRUPADO POR MÊS */}
+      {sortedMesesKeys.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '40px' }}>
+          <h3 style={{ margin: '0', color: 'var(--text-h)', fontSize: '1.1rem' }}>Nosso Histórico</h3>
+          
+          {sortedMesesKeys.map(mesNome => (
+            <div key={mesNome}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>{mesNome}</span>
+                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
               </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {renderBadge(saida.caixinhaId)}
-                <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 500 }}>{saida.data}</span>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {historicoAgrupado[mesNome]
+                  .sort((a: any, b: any) => new Date(b.dataRaw).getTime() - new Date(a.dataRaw).getTime())
+                  .map((saida: any) => (
+                  <div key={saida.id} style={{ background: 'var(--bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', opacity: 0.8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <StatusCheck color="#10b981" />
+                        <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.05rem' }}>{saida.titulo}</h4>
+                      </div>
+                      <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--text-h)', fontSize: '1.1rem' }}>
+                        {formatMoney(saida.estimado)}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {renderBadge(saida.caixinhaId)}
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 500 }}>{saida.data}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
