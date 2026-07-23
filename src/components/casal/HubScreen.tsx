@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, onSnapshot, arrayUnion, getDoc } from 'firebase/firestore'; 
-import { db } from '../../services/firebase'; 
+// ✨ NOVO: Importando o getToken e o messaging
+import { getToken } from 'firebase/messaging';
+import { db, messaging } from '../../services/firebase'; 
 import { SplashScreen } from '../SplashScreen'; 
 
 import logoApp from '../../assets/image/logo.png'; 
@@ -16,7 +18,6 @@ const ICON_BELL = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.
 export const HubScreen = ({ 
   setActiveView, parceiro1, parceiro2, fotoP1, fotoP2, corP1, corP2, formatMoney,
   casalId, currentUserRole, meuNome, novoDepositoAberto, setNovoDepositoAberto,
-  // ✨ CORREÇÃO APLICADA: Valores padrão = [] adicionados nas listas
   metas = [], 
   contribuicoes = [], 
   despesasRapidas = [], 
@@ -45,9 +46,50 @@ export const HubScreen = ({
 
   const [notificacoes, setNotificacoes] = useState<any[]>([]);
   const [notificacoesAbertas, setNotificacoesAbertas] = useState(false);
+  
+  // ✨ NOVO: Estado para verificar se a pessoa já permitiu notificações
+  const [permissaoNotificacao, setPermissaoNotificacao] = useState('default');
 
   const nomeDoParceiro = meuNome === parceiro1 ? parceiro2 : parceiro1;
   const minhaCor = currentUserRole === 'p1' ? corP1 : corP2;
+
+  // ✨ NOVO: Checa a permissão atual quando a tela carrega
+  useEffect(() => {
+    if ('Notification' in window) {
+      setPermissaoNotificacao(Notification.permission);
+    }
+  }, []);
+
+  // ✨ NOVO: Função que acorda o Fantasma e pega o Token
+  const ativarNotificacoes = async () => {
+    try {
+      setIsProcessando(true);
+      const permission = await Notification.requestPermission();
+      setPermissaoNotificacao(permission);
+      
+      if (permission === 'granted') {
+        // Puxando a chave de forma segura do seu .env
+        const token = await getToken(messaging, { 
+          vapidKey: import.meta.env.VITE_FCM_VAPID_KEY 
+        });
+        
+        if (token && casalId) {
+          // Salva o token no perfil do casal, separando qual celular é de quem
+          await updateDoc(doc(db, 'casais', casalId), {
+            [`tokens.${currentUserRole}`]: token
+          });
+          setAlertMsg("Prontinho! Agora o app vai te avisar em segundo plano.");
+        }
+      } else {
+        setAlertMsg("Você bloqueou as notificações. Libere nas configurações do navegador se quiser receber os avisos.");
+      }
+    } catch (error) {
+      console.error('Erro ao ativar notificações', error);
+      setAlertMsg("Houve um problema ao conectar com o serviço de notificações.");
+    } finally {
+      setIsProcessando(false);
+    }
+  };
 
   useEffect(() => {
     const carregarBoasVindas = async () => {
@@ -232,7 +274,7 @@ export const HubScreen = ({
       {alertMsg && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '32px 24px', maxWidth: '320px', width: '100%', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
-            <h3 style={{ margin: '0 0 12px 0', color: 'var(--text-h)' }}>{alertMsg.includes('sucesso') ? 'Tudo certo!' : 'Aviso'}</h3>
+            <h3 style={{ margin: '0 0 12px 0', color: 'var(--text-h)' }}>{alertMsg.includes('sucesso') || alertMsg.includes('Prontinho') ? 'Tudo certo!' : 'Aviso'}</h3>
             <p style={{ color: 'var(--text)', marginBottom: '24px', fontSize: '0.95rem' }}>{alertMsg}</p>
             <button onClick={() => setAlertMsg('')} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: minhaCor, color: '#fff', border: 'none', fontWeight: 'bold' }}>Entendi</button>
           </div>
@@ -301,6 +343,16 @@ export const HubScreen = ({
               <h3 style={{ margin: 0, color: 'var(--text-h)' }}>Atualizações</h3>
               <button onClick={limparNotificacoes} style={{ background: 'var(--code-bg)', border: 'none', padding: '8px 12px', borderRadius: '12px', color: 'var(--text)', fontWeight: 'bold', cursor: 'pointer' }}>Marcar como Lidas</button>
             </div>
+            
+            {/* ✨ NOVO: Botão interativo se as permissões estiverem pendentes */}
+            {permissaoNotificacao === 'default' && (
+              <div style={{ background: 'rgba(139, 92, 246, 0.05)', padding: '16px', borderRadius: '16px', border: '1px dashed var(--accent)', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-h)' }}>Deseja receber avisos no celular quando <b>{nomeDoParceiro}</b> guardar dinheiro ou criar um novo sonho?</p>
+                <button onClick={ativarNotificacoes} disabled={isProcessando} style={{ padding: '12px', background: 'var(--accent)', color: '#fff', borderRadius: '12px', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+                  {isProcessando ? 'Configurando...' : 'Ativar Alertas em Segundo Plano'}
+                </button>
+              </div>
+            )}
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {notificacoes.length > 0 ? notificacoes.map((n: any) => (
