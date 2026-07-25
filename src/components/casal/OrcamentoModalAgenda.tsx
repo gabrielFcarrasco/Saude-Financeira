@@ -11,34 +11,39 @@ export const OrcamentoModalAgenda = ({
 }: any) => {
 
   const [abaAtiva, setAbaAtiva] = useState<'calendario' | 'alfabeto'>('calendario');
-  const [mesInicioConfig, setMesInicioConfig] = useState('2026-07');
+  
+  // ✨ CORREÇÃO: Agora o mês de início pega o mês real em que o usuário está, e não mais '2026-07' fixo
+  const [mesInicioConfig, setMesInicioConfig] = useState(() => {
+    const hoje = new Date();
+    return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [quemComecouConfig, setQuemComecouConfig] = useState('p2'); 
 
   const [dataVisualizada, setDataVisualizada] = useState(new Date());
   const [feriados, setFeriados] = useState<any[]>([]);
 
+  // ✨ REFERÊNCIA EXATA DO DIA DE HOJE
+  const dataHojeReal = new Date();
+  const diaHoje = dataHojeReal.getDate();
+  const mesHoje = dataHojeReal.getMonth();
+  const anoHoje = dataHojeReal.getFullYear();
+
   useEffect(() => {
     const buscarFeriados = async () => {
       try {
         const anoBusca = dataVisualizada.getFullYear();
-                const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${anoBusca}`);
+        const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${anoBusca}`);
         if (response.ok) {
           const data = await response.json();
           
-          // 1. Criamos o feriado estadual usando a variável anoBusca
           const feriadoSP = {
             date: `${anoBusca}-07-09`,
             name: 'Revolução Constitucionalista (SP)',
             type: 'state'
           };
 
-          // 2. Juntamos a lista nacional com o feriado de SP
           const todosOsFeriados = [...data, feriadoSP];
-
-          // 3. Ordenamos a lista pela data para o 9 de Julho ficar na posição certa
           todosOsFeriados.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-          // 4. Salvamos a lista completa no estado
           setFeriados(todosOsFeriados);
         }
       } catch (error) {
@@ -62,6 +67,8 @@ export const OrcamentoModalAgenda = ({
 
   const mesAnterior = () => setDataVisualizada(new Date(ano, mes - 1, 1));
   const proximoMes = () => setDataVisualizada(new Date(ano, mes + 1, 1));
+  
+  // Função garantida para voltar sempre para o hoje real do dispositivo
   const voltarParaHoje = () => setDataVisualizada(new Date());
 
   const minhaAgenda = currentUserRole === 'p1' ? agendaP1 : agendaP2;
@@ -93,7 +100,6 @@ export const OrcamentoModalAgenda = ({
 
   const prefixoMesAtual = `${ano}-${String(mes + 1).padStart(2, '0')}`;
   
-  // ✨ MÁGICA AQUI: Só mostra na lista de "Marcar" os dias que AINDA NÃO TÊM passeio!
   const matchesDoMes = agendaP1
     .filter((d: string) => agendaP2.includes(d) && d.startsWith(prefixoMesAtual))
     .filter((d: string) => !saidasMesAtual?.some((s: any) => s.dataRaw === d))
@@ -164,13 +170,12 @@ export const OrcamentoModalAgenda = ({
               
               <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={voltarParaHoje}>
                 <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>{mesNomeFormatado} {ano}</h3>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Voltar para hoje</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 'bold', textTransform: 'uppercase' }}>Voltar para hoje</span>
               </div>
               
               <button onClick={proximoMes} style={{ background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '1.2rem', cursor: 'pointer', padding: '4px 12px' }}>{'>'}</button>
             </div>
 
-            {/* ✨ LEGENDA ATUALIZADA E REORGANIZADA */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '24px', fontSize: '0.75rem', fontWeight: 'bold', background: 'var(--code-bg)', padding: '12px', borderRadius: '16px', border: '1px solid var(--border)' }}>
               <span style={{ color: corP1, display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width:10, height:10, borderRadius:'50%', background: corP1}}></div> Livre {parceiro1}</span>
               <span style={{ color: corP2, display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width:10, height:10, borderRadius:'50%', background: corP2}}></div> Livre {parceiro2}</span>
@@ -199,31 +204,32 @@ export const OrcamentoModalAgenda = ({
                 const isP2 = agendaP2.includes(diaStr);
                 const isMatch = isP1 && isP2;
                 
+                // ✨ CHECAGEM SE É O DIA EXATO DE HOJE
+                const isHoje = dia === diaHoje && mes === mesHoje && ano === anoHoje;
+                
                 let bgColor = 'var(--code-bg)'; let textColor = 'var(--text)'; let border = '1px solid var(--border)'; let transform = 'none';
 
-                // ✨ HIERARQUIA VISUAL (Passeio > Match > Feriado > Livre)
                 if (temPasseio) { 
-                  bgColor = '#10b981'; // Verde Sólido 
-                  textColor = '#fff'; 
-                  border = 'none'; 
-                  transform = 'scale(1.05)'; 
+                  bgColor = '#10b981'; textColor = '#fff'; border = 'none'; transform = 'scale(1.05)'; 
                 } 
                 else if (isMatch) { 
-                  bgColor = '#f59e0b'; // Laranja Sólido
-                  textColor = '#fff'; 
-                  border = 'none'; 
-                  transform = 'scale(1.05)'; 
+                  bgColor = '#f59e0b'; textColor = '#fff'; border = 'none'; transform = 'scale(1.05)'; 
                 } 
                 else if (feriadoAqui) {
-                  bgColor = 'rgba(239, 68, 68, 0.15)'; 
-                  textColor = '#ef4444';
-                  border = '1px solid #ef4444';
+                  bgColor = 'rgba(239, 68, 68, 0.15)'; textColor = '#ef4444'; border = '1px solid #ef4444';
                 }
                 else if (isP1) { 
                   bgColor = `${corP1}20`; textColor = corP1; border = `1px solid ${corP1}`; 
                 } 
                 else if (isP2) { 
                   bgColor = `${corP2}20`; textColor = corP2; border = `1px solid ${corP2}`; 
+                }
+
+                // ✨ APLICAÇÃO VISUAL DO DIA DE HOJE
+                if (isHoje && bgColor === 'var(--code-bg)') {
+                  border = '2px solid var(--accent)';
+                  textColor = 'var(--text-h)';
+                  bgColor = 'var(--bg)';
                 }
 
                 return (
@@ -234,9 +240,15 @@ export const OrcamentoModalAgenda = ({
                     >
                       {dia}
                     </button>
-                    {/* Bolinha vermelha de feriado se tiver passeio ou match no mesmo dia */}
+                    
+                    {/* Indicador de Feriado sobreposto */}
                     {feriadoAqui && (isMatch || temPasseio) && (
                       <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', border: '2px solid var(--bg)' }}></div>
+                    )}
+                    
+                    {/* ✨ Bolinha marcadora para o dia de hoje */}
+                    {isHoje && (
+                      <div style={{ position: 'absolute', bottom: '4px', left: '50%', transform: 'translateX(-50%)', width: '4px', height: '4px', background: textColor === '#fff' ? '#fff' : 'var(--accent)', borderRadius: '50%' }}></div>
                     )}
                   </div>
                 );
@@ -261,7 +273,7 @@ export const OrcamentoModalAgenda = ({
               </div>
             )}
 
-            {/* ✨ LISTA DE MATCHES (Apenas os que não foram agendados) */}
+            {/* ✨ LISTA DE MATCHES */}
             {matchesDoMes.length > 0 ? (
               <div className="animate-fade-in" style={{ background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '20px', borderRadius: '20px', marginBottom: '24px' }}>
                 <h4 style={{ margin: '0 0 16px 0', color: '#d97706', display: 'flex', alignItems: 'center', gap: '8px' }}>✨ Dias Livres Juntos ({mesNomeFormatado})</h4>
