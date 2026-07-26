@@ -12,7 +12,6 @@ export const OrcamentoModalAgenda = ({
 
   const [abaAtiva, setAbaAtiva] = useState<'calendario' | 'alfabeto'>('calendario');
   
-  // ✨ CORREÇÃO: Agora o mês de início pega o mês real em que o usuário está, e não mais '2026-07' fixo
   const [mesInicioConfig, setMesInicioConfig] = useState(() => {
     const hoje = new Date();
     return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
@@ -22,7 +21,6 @@ export const OrcamentoModalAgenda = ({
   const [dataVisualizada, setDataVisualizada] = useState(new Date());
   const [feriados, setFeriados] = useState<any[]>([]);
 
-  // ✨ REFERÊNCIA EXATA DO DIA DE HOJE
   const dataHojeReal = new Date();
   const diaHoje = dataHojeReal.getDate();
   const mesHoje = dataHojeReal.getMonth();
@@ -35,20 +33,12 @@ export const OrcamentoModalAgenda = ({
         const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${anoBusca}`);
         if (response.ok) {
           const data = await response.json();
-          
-          const feriadoSP = {
-            date: `${anoBusca}-07-09`,
-            name: 'Revolução Constitucionalista (SP)',
-            type: 'state'
-          };
-
+          const feriadoSP = { date: `${anoBusca}-07-09`, name: 'Revolução Constitucionalista (SP)', type: 'state' };
           const todosOsFeriados = [...data, feriadoSP];
           todosOsFeriados.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           setFeriados(todosOsFeriados);
         }
-      } catch (error) {
-        console.error("Erro ao buscar feriados:", error);
-      }
+      } catch (error) { console.error("Erro ao buscar feriados:", error); }
     };
     if (agendaAberto) buscarFeriados();
   }, [dataVisualizada.getFullYear(), agendaAberto]);
@@ -59,16 +49,12 @@ export const OrcamentoModalAgenda = ({
   const mes = dataVisualizada.getMonth();
   const diasNoMes = new Date(ano, mes + 1, 0).getDate();
   const dias = Array.from({length: diasNoMes}, (_, i) => i + 1);
-  
   const mesNome = dataVisualizada.toLocaleDateString('pt-BR', { month: 'long' });
   const mesNomeFormatado = mesNome.charAt(0).toUpperCase() + mesNome.slice(1);
-  
   const primeiroDiaSemana = new Date(ano, mes, 1).getDay(); 
 
   const mesAnterior = () => setDataVisualizada(new Date(ano, mes - 1, 1));
   const proximoMes = () => setDataVisualizada(new Date(ano, mes + 1, 1));
-  
-  // Função garantida para voltar sempre para o hoje real do dispositivo
   const voltarParaHoje = () => setDataVisualizada(new Date());
 
   const minhaAgenda = currentUserRole === 'p1' ? agendaP1 : agendaP2;
@@ -77,7 +63,6 @@ export const OrcamentoModalAgenda = ({
   const toggleDia = async (dia: number) => {
     const diaStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
     let novaAgenda = [...minhaAgenda];
-    
     const isAdicionando = !novaAgenda.includes(diaStr);
 
     if (novaAgenda.includes(diaStr)) novaAgenda = novaAgenda.filter((d: string) => d !== diaStr);
@@ -94,12 +79,10 @@ export const OrcamentoModalAgenda = ({
         createdAt: new Date().toISOString()
       });
     }
-
     await updateDoc(doc(db, 'casais', casalId), updateData);
   };
 
   const prefixoMesAtual = `${ano}-${String(mes + 1).padStart(2, '0')}`;
-  
   const matchesDoMes = agendaP1
     .filter((d: string) => agendaP2.includes(d) && d.startsWith(prefixoMesAtual))
     .filter((d: string) => !saidasMesAtual?.some((s: any) => s.dataRaw === d))
@@ -113,6 +96,18 @@ export const OrcamentoModalAgenda = ({
   const salvarConfigAlfabeto = async () => {
     await updateDoc(doc(db, 'casais', casalId), {
       alfabetoConfig: { mesInicio: mesInicioConfig, quemComecou: quemComecouConfig }
+    });
+  };
+
+  // ✨ VERIFICADOR ESTRITO DE ASPAS
+  const checarSeLetraFoiFeita = (letraDoMes: string) => {
+    return saidasMesAtual.some((saida: any) => {
+      if (!saida.titulo) return false;
+      const tituloUpper = saida.titulo.toUpperCase();
+      const letraUpper = letraDoMes.toUpperCase();
+      
+      // Checa exclusivamente se tem "A" ou 'A' no título
+      return tituloUpper.includes(`"${letraUpper}"`) || tituloUpper.includes(`'${letraUpper}'`);
     });
   };
 
@@ -136,7 +131,9 @@ export const OrcamentoModalAgenda = ({
       const nomeResponsavel = vezDe === 'p1' ? parceiro1 : parceiro2;
       const corResponsavel = vezDe === 'p1' ? corP1 : corP2;
 
-      lista.push({ mesStr: nomeMesStr, letra, responsavel: nomeResponsavel, cor: corResponsavel });
+      const jaFoiFeito = i === 0 ? checarSeLetraFoiFeita(letra) : false;
+
+      lista.push({ mesStr: nomeMesStr, letra, responsavel: nomeResponsavel, cor: corResponsavel, jaFoiFeito });
     }
     return lista;
   };
@@ -150,7 +147,6 @@ export const OrcamentoModalAgenda = ({
         
         <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px' }}></div>
         
-        {/* ABAS DE NAVEGAÇÃO */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', background: 'var(--code-bg)', padding: '6px', borderRadius: '16px' }}>
           <button onClick={() => setAbaAtiva('calendario')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '0.9rem', transition: '0.2s', background: abaAtiva === 'calendario' ? 'var(--bg)' : 'transparent', color: abaAtiva === 'calendario' ? 'var(--text-h)' : 'var(--text)', boxShadow: abaAtiva === 'calendario' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none' }}>
             📅 Calendário
@@ -160,11 +156,8 @@ export const OrcamentoModalAgenda = ({
           </button>
         </div>
 
-        {/* ABA: CALENDÁRIO COM FERIADOS */}
         {abaAtiva === 'calendario' && (
           <div className="animate-fade-in">
-            
-            {/* CONTROLES DO MÊS */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', background: 'var(--code-bg)', padding: '12px 16px', borderRadius: '20px', border: '1px solid var(--border)' }}>
               <button onClick={mesAnterior} style={{ background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '1.2rem', cursor: 'pointer', padding: '4px 12px' }}>{'<'}</button>
               
@@ -179,14 +172,11 @@ export const OrcamentoModalAgenda = ({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '24px', fontSize: '0.75rem', fontWeight: 'bold', background: 'var(--code-bg)', padding: '12px', borderRadius: '16px', border: '1px solid var(--border)' }}>
               <span style={{ color: corP1, display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width:10, height:10, borderRadius:'50%', background: corP1}}></div> Livre {parceiro1}</span>
               <span style={{ color: corP2, display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width:10, height:10, borderRadius:'50%', background: corP2}}></div> Livre {parceiro2}</span>
-              
               <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width:12, height:12, borderRadius:'50%', background: '#f59e0b'}}></div> Deu Match!</span>
               <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width:12, height:12, borderRadius:'50%', background: '#10b981'}}></div> Já Marcado</span>
-              
               <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px', gridColumn: 'span 2', justifyContent: 'center' }}><div style={{width:10, height:10, borderRadius:'50%', background: '#ef4444'}}></div> Feriado Nacional</span>
             </div>
 
-            {/* GRID DO CALENDÁRIO */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', marginBottom: '16px' }}>
               {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
                 <div key={d} style={{ textAlign: 'center', fontSize: '0.7rem', fontWeight: 'bold', color: 'var(--text)', marginBottom: '8px' }}>{d}</div>
@@ -196,57 +186,34 @@ export const OrcamentoModalAgenda = ({
 
               {dias.map(dia => {
                 const diaStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
-                
                 const temPasseio = saidasMesAtual?.some((s: any) => s.dataRaw === diaStr);
                 const feriadoAqui = feriados.find(f => f.date === diaStr);
 
                 const isP1 = agendaP1.includes(diaStr);
                 const isP2 = agendaP2.includes(diaStr);
                 const isMatch = isP1 && isP2;
-                
-                // ✨ CHECAGEM SE É O DIA EXATO DE HOJE
                 const isHoje = dia === diaHoje && mes === mesHoje && ano === anoHoje;
                 
                 let bgColor = 'var(--code-bg)'; let textColor = 'var(--text)'; let border = '1px solid var(--border)'; let transform = 'none';
 
-                if (temPasseio) { 
-                  bgColor = '#10b981'; textColor = '#fff'; border = 'none'; transform = 'scale(1.05)'; 
-                } 
-                else if (isMatch) { 
-                  bgColor = '#f59e0b'; textColor = '#fff'; border = 'none'; transform = 'scale(1.05)'; 
-                } 
-                else if (feriadoAqui) {
-                  bgColor = 'rgba(239, 68, 68, 0.15)'; textColor = '#ef4444'; border = '1px solid #ef4444';
-                }
-                else if (isP1) { 
-                  bgColor = `${corP1}20`; textColor = corP1; border = `1px solid ${corP1}`; 
-                } 
-                else if (isP2) { 
-                  bgColor = `${corP2}20`; textColor = corP2; border = `1px solid ${corP2}`; 
-                }
+                if (temPasseio) { bgColor = '#10b981'; textColor = '#fff'; border = 'none'; transform = 'scale(1.05)'; } 
+                else if (isMatch) { bgColor = '#f59e0b'; textColor = '#fff'; border = 'none'; transform = 'scale(1.05)'; } 
+                else if (feriadoAqui) { bgColor = 'rgba(239, 68, 68, 0.15)'; textColor = '#ef4444'; border = '1px solid #ef4444'; }
+                else if (isP1) { bgColor = `${corP1}20`; textColor = corP1; border = `1px solid ${corP1}`; } 
+                else if (isP2) { bgColor = `${corP2}20`; textColor = corP2; border = `1px solid ${corP2}`; }
 
-                // ✨ APLICAÇÃO VISUAL DO DIA DE HOJE
                 if (isHoje && bgColor === 'var(--code-bg)') {
-                  border = '2px solid var(--accent)';
-                  textColor = 'var(--text-h)';
-                  bgColor = 'var(--bg)';
+                  border = '2px solid var(--accent)'; textColor = 'var(--text-h)'; bgColor = 'var(--bg)';
                 }
 
                 return (
                   <div key={dia} style={{ position: 'relative' }}>
-                    <button 
-                      onClick={() => toggleDia(dia)} 
-                      style={{ width: '100%', aspectRatio: '1', borderRadius: '10px', background: bgColor, color: textColor, border: border, fontWeight: 'bold', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: transform, padding: 0 }}
-                    >
+                    <button onClick={() => toggleDia(dia)} style={{ width: '100%', aspectRatio: '1', borderRadius: '10px', background: bgColor, color: textColor, border: border, fontWeight: 'bold', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: transform, padding: 0 }}>
                       {dia}
                     </button>
-                    
-                    {/* Indicador de Feriado sobreposto */}
                     {feriadoAqui && (isMatch || temPasseio) && (
                       <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', border: '2px solid var(--bg)' }}></div>
                     )}
-                    
-                    {/* ✨ Bolinha marcadora para o dia de hoje */}
                     {isHoje && (
                       <div style={{ position: 'absolute', bottom: '4px', left: '50%', transform: 'translateX(-50%)', width: '4px', height: '4px', background: textColor === '#fff' ? '#fff' : 'var(--accent)', borderRadius: '50%' }}></div>
                     )}
@@ -255,7 +222,6 @@ export const OrcamentoModalAgenda = ({
               })}
             </div>
 
-            {/* LISTA DE FERIADOS DO MÊS */}
             {feriadosDoMes.length > 0 && (
               <div className="animate-fade-in" style={{ marginBottom: '24px' }}>
                 <h4 style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text)', textTransform: 'uppercase' }}>Feriados neste mês:</h4>
@@ -273,7 +239,6 @@ export const OrcamentoModalAgenda = ({
               </div>
             )}
 
-            {/* ✨ LISTA DE MATCHES */}
             {matchesDoMes.length > 0 ? (
               <div className="animate-fade-in" style={{ background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '20px', borderRadius: '20px', marginBottom: '24px' }}>
                 <h4 style={{ margin: '0 0 16px 0', color: '#d97706', display: 'flex', alignItems: 'center', gap: '8px' }}>✨ Dias Livres Juntos ({mesNomeFormatado})</h4>
@@ -295,7 +260,6 @@ export const OrcamentoModalAgenda = ({
           </div>
         )}
 
-        {/* ABA: ENCONTROS DE A a Z */}
         {abaAtiva === 'alfabeto' && (
           <div className="animate-fade-in">
             {!alfabetoConfig ? (
@@ -325,38 +289,61 @@ export const OrcamentoModalAgenda = ({
                </div>
             ) : (
                <div>
-                 <p style={{ color: 'var(--text)', marginBottom: '24px', fontSize: '0.9rem', textAlign: 'center', lineHeight: '1.4' }}>
+                 <p style={{ color: 'var(--text)', marginBottom: '8px', fontSize: '0.9rem', textAlign: 'center', lineHeight: '1.4' }}>
                    A cada mês, a missão é criar um rolê inesquecível com a letra da vez. O de quem será melhor? 🏆
                  </p>
+                 
+                 {/* ✨ LEGENDA ADICIONADA AQUI */}
+                 <div style={{ background: 'rgba(138, 43, 226, 0.1)', padding: '10px 14px', borderRadius: '12px', marginBottom: '24px', border: '1px solid rgba(138, 43, 226, 0.2)', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                   <span style={{ fontSize: '1.2rem' }}>💡</span>
+                   <p style={{ color: 'var(--text-h)', margin: 0, fontSize: '0.75rem', lineHeight: '1.4' }}>
+                     <strong>Dica:</strong> Para o app dar o Check, o título do passeio precisa ter a letra entre aspas. Ex: <strong>Encontro "A"</strong>.
+                   </p>
+                 </div>
                  
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
                    {listaAlfabeto.map((item, index) => (
                      <div key={index} style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '20px', border: `1px solid ${index === 0 ? item.cor : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: index === 0 ? `0 4px 12px ${item.cor}20` : 'none' }}>
                         
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                          <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: `${item.cor}20`, color: item.cor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: '900' }}>
-                            {item.letra}
-                          </div>
+                          
+                          {item.jaFoiFeito ? (
+                            <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            </div>
+                          ) : (
+                            <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: `${item.cor}20`, color: item.cor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: '900' }}>
+                              {item.letra}
+                            </div>
+                          )}
+
                           <div>
                             <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '4px' }}>
                               {item.mesStr}
                             </span>
-                            <span style={{ display: 'block', fontSize: '1.05rem', fontWeight: 'bold', color: 'var(--text-h)' }}>
+                            <span style={{ display: 'block', fontSize: '1.05rem', fontWeight: 'bold', color: item.jaFoiFeito ? '#10b981' : 'var(--text-h)', textDecoration: item.jaFoiFeito ? 'line-through' : 'none' }}>
                               Vez de {item.responsavel}
                             </span>
                           </div>
                         </div>
 
                         {index === 0 && (
-                          <button 
-                            onClick={() => {
-                              setAgendaAberto(false);
-                              abrirNovoPlanoComData('', `Encontro Letra ${item.letra}`);
-                            }} 
-                            style={{ background: item.cor, color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' }}
-                          >
-                            Agendar
-                          </button>
+                          item.jaFoiFeito ? (
+                            <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '0.85rem', padding: '10px 12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px' }}>
+                              Missão Cumprida!
+                            </span>
+                          ) : (
+                            <button 
+                              onClick={() => {
+                                setAgendaAberto(false);
+                                // ✨ JÁ PREENCHE COM AS ASPAS CERTINHAS
+                                abrirNovoPlanoComData('', `Encontro "${item.letra}"`);
+                              }} 
+                              style={{ background: item.cor, color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer' }}
+                            >
+                              Agendar
+                            </button>
+                          )
                         )}
                      </div>
                    ))}

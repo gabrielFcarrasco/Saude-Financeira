@@ -21,6 +21,10 @@ export const OrcamentoLivreScreen = ({
   const [dicaRapida, setDicaRapida] = useState('Analisando o clima financeiro...');
   const [dicaDataFirebase, setDicaDataFirebase] = useState('');
   
+  // ✨ NOVO: Puxando as rendas para enviar para a IA analisar
+  const [rendaP1, setRendaP1] = useState(0);
+  const [rendaP2, setRendaP2] = useState(0);
+
   const [caixinhas, setCaixinhas] = useState<any[]>([]);
   const [editandoCaixinhas, setEditandoCaixinhas] = useState(false);
   const [simCaixinha, setSimCaixinha] = useState('');
@@ -63,6 +67,10 @@ export const OrcamentoLivreScreen = ({
         if (data.dicaLazerData) setDicaDataFirebase(data.dicaLazerData);
         if (data.dicaLazerTexto) setDicaRapida(data.dicaLazerTexto);
         if (data.alfabetoConfig) setAlfabetoConfig(data.alfabetoConfig);
+        
+        // ✨ NOVO: Salvando a renda no estado do componente
+        if (data.rendaP1) setRendaP1(Number(data.rendaP1));
+        if (data.rendaP2) setRendaP2(Number(data.rendaP2));
       }
     });
     return () => unsub();
@@ -334,7 +342,6 @@ export const OrcamentoLivreScreen = ({
         caixinhasValidas={caixinhasValidas}
       />
 
-      {/* ✨ Modal injetado direto no body para travar bem no meio da tela */}
       {avisoPendenciasAberto && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '32px 24px', width: '100%', maxWidth: '360px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', border: '1px solid #f59e0b' }}>
@@ -356,7 +363,6 @@ export const OrcamentoLivreScreen = ({
         document.body
       )}
 
-      {/* ✨ Modal injetado direto no body para travar bem no meio da tela */}
       {saidaParaReabrir && createPortal(
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="animate-fade-in" style={{ background: 'var(--code-bg)', borderRadius: '28px', padding: '32px 24px', width: '100%', maxWidth: '360px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', border: '1px solid #ef4444' }}>
@@ -422,12 +428,14 @@ export const OrcamentoLivreScreen = ({
         alfabetoConfig={alfabetoConfig} 
       />
 
+      {/* ✨ NOVO: Enviando as rendas para o assistente */}
       <OrcamentoModalAssistente
         assistenteAberto={assistenteAberto} setAssistenteAberto={setAssistenteAberto}
         casalId={casalId} parceiro1={parceiro1} parceiro2={parceiro2}
         limiteMensalLazer={limiteMensalLazer} gastoEPlanejado={gastoEPlanejado}
         caixinhasValidas={caixinhasValidas} gastosPorCaixinha={gastosPorCaixinha}
         saidasMesAtual={saidasMesAtualVisual} formatMoney={formatMoney}
+        rendaP1={rendaP1} rendaP2={rendaP2}
       />
 
       <div className="scroll-spacer"></div>
