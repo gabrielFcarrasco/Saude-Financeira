@@ -9,7 +9,7 @@ export const OrcamentoModalAssistente = ({
   assistenteAberto, setAssistenteAberto, casalId, 
   parceiro1, parceiro2, limiteMensalLazer, gastoEPlanejado, 
   caixinhasValidas, gastosPorCaixinha, saidasMesAtual, formatMoney,
-  rendaP1, rendaP2 // ✨ As rendas chegaram aqui
+  rendaP1, rendaP2
 }: any) => {
 
   const [inputTexto, setInputTexto] = useState('');
@@ -34,9 +34,7 @@ export const OrcamentoModalAssistente = ({
   useEffect(() => {
     let timer1: NodeJS.Timeout;
     let timer2: NodeJS.Timeout;
-
     if (isPensando) {
-      setEtapaIA('Lendo extratos detalhados...');
       timer1 = setTimeout(() => setEtapaIA('Cruzando dados com a renda...'), 1500);
       timer2 = setTimeout(() => setEtapaIA('Analisando locais e digitando...'), 3500);
     } else {
@@ -62,28 +60,21 @@ export const OrcamentoModalAssistente = ({
 
   const restante = limiteMensalLazer - gastoEPlanejado;
 
-  // ✨ A MÁGICA DE VERDADE: O MEGA PROMPT
   const fazerPergunta = async (textoPergunta: string) => {
     if (!textoPergunta.trim() || isPensando) return;
     
-    setInputTexto('');
-    setPerguntaFeita(textoPergunta);
-    setIsPensando(true);
-    setRespostaIA('');
-    
+    setInputTexto(''); setPerguntaFeita(textoPergunta); setIsPensando(true); setRespostaIA(''); setEtapaIA('Lendo extratos detalhados...');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // 1. Mapeamento Profundo: A IA vai ler centavo por centavo de cada item!
     const passeiosDetalhados = saidasMesAtual.map((s: any) => {
       let detalhe = `- Rolê "${s.titulo}" (${s.status}): Total ${formatMoney(s.estimado || 0)}.`;
       if (s.itens && s.itens.length > 0) {
-         const itensStr = s.itens.map((i: any) => `[Item: ${i.nome || '?'}, Valor: ${formatMoney(i.valor)}]`).join(', ');
+         const itensStr = s.itens.map((i: any) => `[Item: ${i.nome || '?'}, Categoria: ${i.categoria || 'Não definida'}, Valor: ${formatMoney(i.valor)}]`).join(', ');
          detalhe += ` O que compraram lá dentro: ${itensStr}.`;
       }
       return detalhe;
     }).join('\n      ');
 
-    // 2. O Contexto Monstruoso
     const contexto = `
       SISTEMA: VOCÊ É O "CÉREBRO FINANCEIRO E GUIA LOCAL DO CASAL", um assistente ultra-avançado especializado em finanças, análise comportamental e guia de lazer no Estado de São Paulo, focando especialmente na Capital, Região Metropolitana e no ABC Paulista (Santo André, São Bernardo, São Caetano, Mauá, etc.).
 
@@ -93,23 +84,16 @@ export const OrcamentoModalAssistente = ({
       - Teto de Lazer Conjunto: ${formatMoney(limiteMensalLazer)}
       - Já gastaram/planejaram: ${formatMoney(gastoEPlanejado)}
       - CAIXA LIVRE (Sobra real para gastar hoje): ${formatMoney(restante)}
-
-      📊 CATEGORIAS (ORÇAMENTO VS USO):
-      ${caixinhasValidas.map((c:any) => `- ${c.nome}: Teto ${formatMoney(c.valor)} | Usado: ${formatMoney(gastosPorCaixinha[c.id] || 0)}`).join('\n')}
       
-      🛒 EXTRATO DETALHADO E COMPORTAMENTO DE GASTOS (LEIA COM ATENÇÃO):
+      🛒 EXTRATO DETALHADO E COMPORTAMENTO DE GASTOS:
       ${passeiosDetalhados || 'Nenhum rolê registrado ainda.'}
 
       🧠 MOTOR DE INFERÊNCIA E REGRAS ABSOLUTAS:
-      1. ANÁLISE SEMÂNTICA PROFUNDA: Nunca seja genérico. Leia os nomes dos itens inseridos livremente no extrato (ex: "Ifood", "McDonalds", "Dogão", "Uber", "Estacionamento", "Cerveja"). Agrupe-os logicamente na sua mente. Se perguntarem "com o que gastamos mais?", SOME os itens semelhantes invisivelmente e entregue a resposta mastigada: "Vocês torraram R$ X só com delivery e lanches (como o McDonalds e o Dogão)". Prove que você leu os itens citando os nomes deles!
-      2. ANÁLISE DE RENDA E ESFORÇO: Avalie o peso dos gastos com base na renda de cada um. Se a sobra estiver apertada, avise.
-      3. GUIA LOCAL ESPECIALIZADO (SP e ABC): Ao sugerir passeios, você DEVE recomendar locais REAIS e conhecidos em São Paulo e na região do ABC Paulista cruzando com o valor exato do "CAIXA LIVRE".
-         - Sobra BAIXA (Menos de R$ 50): Sugira rolês quase gratuitos como o Parque Celso Daniel (Santo André), Parque da Juventude (SBC), Parque Guapituba (Mauá), Av. Paulista de domingo, SESCs do ABC ou de SP, ou noites criativas em casa.
-         - Sobra MÉDIA (R$ 50 a R$ 150): Sugira boliche no ABC, Rota dos Restaurantes no Demarchi (SBC), comer um lanche artesanal, ir ao cinema VIP do Grand Plaza ou passeios culturais no Centro de SP.
-         - Sobra ALTA (Acima de R$ 150): Dê opções premium de restaurantes, teatro, ou viagens curtas de bate-volta (Paranapiacaba, Litoral sul).
-      4. CÁLCULO MATEMÁTICO FORÇADO: Se eles perguntarem "Dá pra ir no cinema hoje?", faça a conta cruzando o preço médio de cinema com o "Caixa Livre" e dê a resposta exata.
-      5. TOM DE VOZ: Seja extremamente analítico, sagaz, mas muito amigável e descolado (estilo paulista, informal). Seja o melhor amigo do casal. VOCÊ DEVE iniciar a conversa chamando-os pelos nomes (${parceiro1} e ${parceiro2}) para ficar bem pessoal e carinhoso!
-      6. FORMATO: Sem limites de criatividade. Use respostas estruturadas com bullet points e NEGRITOS nos valores, nomes de locais e nomes dos itens gastos.
+      1. ANÁLISE SEMÂNTICA PROFUNDA: Nunca seja genérico. Leia as categorias e os nomes. Prove que leu os itens citando os nomes e categorias deles!
+      2. ANÁLISE DE RENDA: Avalie o peso dos gastos com base na renda.
+      3. GUIA LOCAL ESPECIALIZADO: Sugira locais REAIS no ABC e SP cruzando com o "CAIXA LIVRE".
+      4. TOM DE VOZ: Seja extremamente analítico, mas amigável e descolado. VOCÊ DEVE iniciar a conversa chamando-os pelos nomes (${parceiro1} e ${parceiro2})!
+      5. FORMATO: Sem limites de criatividade. Use NEGRITOS nos valores e nomes.
     `;
 
     try {
@@ -125,7 +109,6 @@ export const OrcamentoModalAssistente = ({
   const sugestoesRapidas = [
     "No que a gente gastou mais dinheiro nesse mês?",
     "A gente tá gastando muito com comida?",
-    "Sugere um rolê maneiro aqui perto pro fim de semana!",
   ];
 
   return createPortal(
@@ -141,30 +124,24 @@ export const OrcamentoModalAssistente = ({
             </div>
             Assistente
           </h3>
-          
-          <button 
-            onClick={() => setAssistenteAberto(false)} 
-            style={{ background: 'var(--bg)', border: '1px solid var(--border)', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', fontSize: '1.1rem', fontWeight: 'bold', fontFamily: 'sans-serif', padding: 0 }}
-          >
-            X
-          </button>
+          <button onClick={() => setAssistenteAberto(false)} style={{ background: 'var(--bg)', border: '1px solid var(--border)', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', fontSize: '1.1rem', fontWeight: 'bold', padding: 0 }}>X</button>
         </div>
 
         <div ref={chatRef} style={{ overflowY: 'auto', flex: 1, paddingRight: '4px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           <div style={{ alignSelf: 'flex-start', background: 'var(--code-bg)', border: '1px solid var(--border)', padding: '16px 20px', borderRadius: '0 20px 20px 20px', maxWidth: '90%' }}>
             <p style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.95rem', lineHeight: '1.5' }}>
-              E aí! Eu já li cada centavo do extrato de vocês e cruzei com as rendas e o teto do mês. Quer que eu faça a conta de algum rolê ou que eu entregue onde o dinheiro tá sumindo? Pode mandar!
+              E aí! Como posso ajudar nas análises hoje? Os gráficos de vocês estão super organizados! 📊✨
             </p>
           </div>
 
           {!perguntaFeita && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase', paddingLeft: '8px' }}>Perguntas rápidas</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase', paddingLeft: '8px' }}>Ações Inteligentes</span>
+
               {sugestoesRapidas.map((sug, i) => (
                 <button key={i} onClick={() => fazerPergunta(sug)} style={{ background: 'transparent', border: '1px solid var(--accent)', padding: '14px 16px', borderRadius: '16px', color: 'var(--accent)', fontWeight: '600', fontSize: '0.9rem', textAlign: 'left', cursor: 'pointer', transition: '0.2s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  {sug} 
-                  <span style={{ fontSize: '1.3rem', paddingBottom: '2px', lineHeight: 0 }}>›</span>
+                  {sug} <span style={{ fontSize: '1.3rem', paddingBottom: '2px', lineHeight: 0 }}>›</span>
                 </button>
               ))}
             </div>
@@ -194,17 +171,11 @@ export const OrcamentoModalAssistente = ({
 
         <div style={{ display: 'flex', gap: '12px', background: 'var(--code-bg)', padding: '8px 12px', borderRadius: '24px', border: '1px solid var(--border)', flexShrink: 0, alignItems: 'flex-end' }}>
           <textarea 
-            ref={textareaRef}
-            rows={1}
-            value={inputTexto} 
-            onChange={handleInput} 
-            onKeyDown={handleKeyDown}
-            placeholder="Mensagem..." 
+            ref={textareaRef} rows={1} value={inputTexto} onChange={handleInput} onKeyDown={handleKeyDown} placeholder="Mensagem..." 
             style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-h)', padding: '8px 4px', outline: 'none', fontSize: '1rem', resize: 'none', minHeight: '40px', maxHeight: '120px', fontFamily: 'inherit' }}
           />
           <button 
-            onClick={() => fazerPergunta(inputTexto)}
-            disabled={!inputTexto.trim() || isPensando}
+            onClick={() => fazerPergunta(inputTexto)} disabled={!inputTexto.trim() || isPensando}
             style={{ background: 'var(--accent)', border: 'none', width: '40px', height: '40px', borderRadius: '50%', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: (!inputTexto.trim() || isPensando) ? 0.5 : 1, transition: '0.2s', marginBottom: '2px', flexShrink: 0 }}
           >
             <img src={ICON_SEND} alt="Enviar" style={{ width: '18px', height: '18px', transform: 'translateX(-1px)' }} />

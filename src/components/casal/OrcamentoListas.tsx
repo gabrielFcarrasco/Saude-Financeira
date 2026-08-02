@@ -27,7 +27,8 @@ const StatusClock = ({ color }: { color: string }) => (
 export const OrcamentoListas = ({
   saidasMesAtual, saidasHistorico, saidaExpandida, setSaidaExpandida,
   formatMoney, parceiro1, parceiro2, isProcessando,
-  abrirEdicao, prepararConclusao, handleReabrirPasseio, caixinhasValidas
+  abrirEdicao, prepararConclusao, handleReabrirPasseio, caixinhasValidas,
+  setModalCategorias
 }: any) => {
 
   const renderBadge = (caixinhaId: string) => {
@@ -40,7 +41,6 @@ export const OrcamentoListas = ({
     );
   };
 
-  // ✨ ORDENAÇÃO DO MÊS: Planejados primeiro, depois por data decrescente (ex: dia 31 primeiro, dia 1 por último)
   const sortedSaidasMes = [...saidasMesAtual].sort((a: any, b: any) => {
     if (a.status === 'planejado' && b.status !== 'planejado') return -1;
     if (a.status !== 'planejado' && b.status === 'planejado') return 1;
@@ -49,7 +49,6 @@ export const OrcamentoListas = ({
     return dateB - dateA;
   });
 
-  // ✨ AGRUPAMENTO DO HISTÓRICO: Separando por meses
   const historicoAgrupado = saidasHistorico.reduce((acc: any, saida: any) => {
     if (!saida.dataRaw) return acc;
     const [ano, mes] = saida.dataRaw.split('-');
@@ -62,12 +61,66 @@ export const OrcamentoListas = ({
     return acc;
   }, {});
 
-  // Ordena os meses do histórico do mais recente para o mais antigo
   const sortedMesesKeys = Object.keys(historicoAgrupado).sort((a, b) => {
     const dateA = new Date(historicoAgrupado[a][0].dataRaw).getTime();
     const dateB = new Date(historicoAgrupado[b][0].dataRaw).getTime();
     return dateB - dateA;
   });
+
+  const renderItensDetalhes = (saida: any) => (
+    <div className="animate-fade-in" style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px dashed var(--border)' }}>
+      <p style={{ margin: '0 0 12px 0', fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>O que pagamos:</p>
+      
+      {saida.itens && saida.itens.length > 0 ? (
+        saida.itens.map((item: any, index: number) => (
+          <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg)', padding: '12px', borderRadius: '16px', marginBottom: '8px', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-h)' }}>{item.nome || 'Despesa'}</span>
+              <span style={{ fontWeight: 'bold', color: 'var(--text-h)' }}>{item.valor === 0 || item.valor === "0.00" ? '--' : formatMoney(Number(item.valor))}</span>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{fontSize: '0.75rem', color: 'var(--text)'}}>
+                {item.responsavel === 'ambos' ? 'Dividido' : item.responsavel === 'p1' ? parceiro1 : parceiro2}
+                <span style={{ margin: '0 6px', color: 'var(--border)' }}>•</span>
+                <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{item.categoria || 'Sem Categoria'}</span>
+              </span>
+            </div>
+          </div>
+        ))
+      ) : (
+        <p style={{ fontSize: '0.85rem', color: 'var(--text)', margin: 0 }}>Nenhum gasto detalhado neste plano.</p>
+      )}
+
+      {/* ✨ BOTÃO DE EDITAR CATEGORIAS ISOLADO */}
+      {saida.itens && saida.itens.length > 0 && (
+        <button onClick={(e) => { e.stopPropagation(); setModalCategorias(saida); }} style={{ width: '100%', marginTop: '8px', padding: '12px', background: 'var(--code-bg)', border: '1px dashed var(--accent)', borderRadius: '14px', color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          Ajustar Categorias
+        </button>
+      )}
+
+      {saida.status === 'planejado' ? (
+        <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+          <button onClick={(e) => abrirEdicao(saida, e)} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'var(--bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '0.9rem' }}>
+            Editar Tudo
+          </button>
+          <button onClick={(e) => prepararConclusao(saida, e)} disabled={isProcessando} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: '#10b981', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+            Concluir <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+          <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 'bold', flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+            <StatusCheck color="#10b981" /> Passeio finalizado!
+          </span>
+          <button onClick={(e) => handleReabrirPasseio(saida, e)} disabled={isProcessando} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', fontWeight: 'bold', fontSize: '0.9rem' }}>
+            Reabrir
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -75,84 +128,36 @@ export const OrcamentoListas = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {sortedSaidasMes.map((saida: any) => {
           const isExpandido = saidaExpandida === saida.id;
-          const isPendenteAntigo = saida.isPendenciaPassada; // A flag que criamos no outro arquivo
-
+          const isPendenteAntigo = saida.isPendenciaPassada; 
           return (
             <div key={saida.id} onClick={() => setSaidaExpandida(isExpandido ? null : saida.id)} style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: `1px solid ${saida.status === 'concluido' ? 'rgba(16, 185, 129, 0.3)' : (isPendenteAntigo ? '#f59e0b' : 'var(--border)')}`, cursor: 'pointer', transition: '0.2s', boxShadow: isExpandido ? '0 8px 24px rgba(0,0,0,0.04)' : '0 2px 8px rgba(0,0,0,0.02)' }}>
-              
-              {/* ✨ TAG DE PENDÊNCIA SE FOR ANTIGO */}
               {isPendenteAntigo && (
                 <div style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', fontSize: '0.7rem', fontWeight: 'bold', padding: '4px 10px', borderRadius: '8px', display: 'inline-flex', marginBottom: '12px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
                   ⚠️ PENDÊNCIA (Ciclo Anterior)
                 </div>
               )}
-
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {saida.status === 'concluido' ? <StatusCheck color="#10b981" /> : <StatusClock color={isPendenteAntigo ? '#f59e0b' : 'var(--text)'} />}
-                  <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>
-                    {saida.titulo}
-                  </h4>
+                  <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>{saida.titulo}</h4>
                 </div>
                 <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem', color: saida.status === 'concluido' ? '#10b981' : 'var(--text-h)' }}>
                   {saida.estimado === 0 ? '--' : formatMoney(saida.estimado)}
                 </div>
               </div>
-              
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 {renderBadge(saida.caixinhaId)}
                 <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 500 }}>{saida.data}</span>
               </div>
-
-              {isExpandido && (
-                <div className="animate-fade-in" style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px dashed var(--border)' }}>
-                  <p style={{ margin: '0 0 12px 0', fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>O que pagamos:</p>
-                  
-                  {saida.itens && saida.itens.length > 0 ? (
-                    saida.itens.map((item: any, index: number) => (
-                      <div key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '8px', color: 'var(--text-h)' }}>
-                        <span>• {item.nome || 'Item'} <span style={{fontSize: '0.7rem', color: 'var(--text)'}}>({item.responsavel === 'ambos' ? 'Dividido' : item.responsavel === 'p1' ? parceiro1 : parceiro2})</span></span>
-                        <span style={{ fontWeight: 'bold' }}>{item.valor === 0 || item.valor === "0.00" ? '--' : formatMoney(Number(item.valor))}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text)', margin: 0 }}>Nenhum item detalhado neste plano.</p>
-                  )}
-
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                    {saida.status === 'planejado' ? (
-                       <>
-                         <button onClick={(e) => abrirEdicao(saida, e)} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'var(--bg)', color: 'var(--text-h)', border: '1px solid var(--border)', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                           Editar
-                         </button>
-                         <button onClick={(e) => prepararConclusao(saida, e)} disabled={isProcessando} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: '#10b981', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                           Concluir
-                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                         </button>
-                       </>
-                    ) : (
-                       <>
-                         <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 'bold', flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                           <StatusCheck color="#10b981" /> Passeio finalizado!
-                         </span>
-                         <button onClick={(e) => handleReabrirPasseio(saida, e)} disabled={isProcessando} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                           Reabrir
-                         </button>
-                       </>
-                    )}
-                  </div>
-                </div>
-              )}
+              {isExpandido && renderItensDetalhes(saida)}
             </div>
           );
         })}
       </div>
 
-      {/* ✨ HISTÓRICO AGRUPADO POR MÊS */}
       {sortedMesesKeys.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '40px' }}>
           <h3 style={{ margin: '0', color: 'var(--text-h)', fontSize: '1.1rem' }}>Nosso Histórico</h3>
-          
           {sortedMesesKeys.map(mesNome => (
             <div key={mesNome}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
@@ -163,23 +168,27 @@ export const OrcamentoListas = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {historicoAgrupado[mesNome]
                   .sort((a: any, b: any) => new Date(b.dataRaw).getTime() - new Date(a.dataRaw).getTime())
-                  .map((saida: any) => (
-                  <div key={saida.id} style={{ background: 'var(--bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', opacity: 0.8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <StatusCheck color="#10b981" />
-                        <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.05rem' }}>{saida.titulo}</h4>
+                  .map((saida: any) => {
+                    const isExpandido = saidaExpandida === saida.id;
+                    return (
+                      <div key={saida.id} onClick={() => setSaidaExpandida(isExpandido ? null : saida.id)} style={{ background: 'var(--bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <StatusCheck color="#10b981" />
+                            <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.05rem' }}>{saida.titulo}</h4>
+                          </div>
+                          <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--text-h)', fontSize: '1.1rem' }}>
+                            {formatMoney(saida.estimado)}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          {renderBadge(saida.caixinhaId)}
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 500 }}>{saida.data}</span>
+                        </div>
+                        {isExpandido && renderItensDetalhes(saida)}
                       </div>
-                      <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--text-h)', fontSize: '1.1rem' }}>
-                        {formatMoney(saida.estimado)}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      {renderBadge(saida.caixinhaId)}
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 500 }}>{saida.data}</span>
-                    </div>
-                  </div>
-                ))}
+                    )
+                  })}
               </div>
             </div>
           ))}

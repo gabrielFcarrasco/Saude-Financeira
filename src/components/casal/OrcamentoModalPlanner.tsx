@@ -3,108 +3,160 @@ import { createPortal } from 'react-dom';
 
 export const OrcamentoModalPlanner = ({
   simuladorAberto, setSimuladorAberto, isProcessando, idEdicao,
-  simTitulo, setSimTitulo, simData, setSimData, simItems, setSimItems,
-  parceiro1, parceiro2, handleSalvarPlano, handleExcluirPlano,
-  simCaixinha, setSimCaixinha, caixinhasValidas, formatMoney, gastosPorCaixinha
+  simTitulo, setSimTitulo, simData, setSimData,
+  simItems, setSimItems, simEstimado, setSimEstimado,
+  parceiro1, parceiro2, corP1, corP2,
+  handleSalvarPlano, handleExcluirPlano,
+  simCaixinha, setSimCaixinha, caixinhasValidas, formatMoney, categoriasUnicas 
 }: any) => {
-  
+
   if (!simuladorAberto) return null;
 
-  const handleItemValue = (id: number, e: any) => {
-    const numbers = e.target.value.replace(/\D/g, ''); 
-    const val = numbers ? (parseInt(numbers, 10) / 100).toFixed(2) : '';
-    setSimItems(simItems.map((i:any) => i.id === id ? { ...i, valor: val } : i));
+  const totalSimulacao = simItems.length > 0 
+    ? simItems.reduce((acc: number, curr: any) => acc + Number(curr.valor || 0), 0)
+    : Number(simEstimado || 0);
+
+  const adicionarItem = () => {
+    setSimItems([...simItems, { id: Date.now(), nome: '', valor: '', responsavel: 'ambos', categoria: '' }]);
   };
 
-  const formatMask = (val: string | number) => {
-    if (!val) return '';
-    return Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const atualizarItem = (id: number, campo: string, valor: string) => {
+    setSimItems(simItems.map((item: any) => item.id === id ? { ...item, [campo]: valor } : item));
   };
 
-  const removerItem = (idParaRemover: number) => {
-    setSimItems(simItems.filter((item: any) => item.id !== idParaRemover));
+  const removerItem = (id: number) => {
+    setSimItems(simItems.filter((item: any) => item.id !== id));
   };
 
-  const totalSimulacao = simItems.reduce((acc: number, curr: any) => acc + Number(curr.valor || 0), 0);
+  const getBtnStyle = (isActive: boolean, color: string) => ({
+    flex: 1, padding: '10px 4px', borderRadius: '12px',
+    border: isActive ? `1px solid ${color}` : '1px solid transparent',
+    fontSize: '0.8rem', fontWeight: 'bold',
+    background: isActive ? `${color}20` : 'transparent',
+    color: isActive ? color : 'var(--text)',
+    cursor: 'pointer', transition: '0.2s'
+  });
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div className="animate-slide-up" style={{ background: 'var(--bg)', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '500px', padding: '32px 24px 60px', maxHeight: '90vh', overflowY: 'auto' }}>
-        <h4 style={{ margin: '0 0 20px 0', color: 'var(--text-h)' }}>{idEdicao ? 'Ajustar Plano' : 'Novo Passeio'}</h4>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div className="animate-slide-up" style={{ background: 'var(--bg)', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '600px', padding: '32px 24px', maxHeight: '90vh', overflowY: 'auto' }}>
         
-        <input type="text" placeholder="Nome do Passeio" value={simTitulo} onChange={e => setSimTitulo(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', marginBottom: '16px', outline: 'none', color: 'var(--text-h)', fontWeight: 'bold' }} />
-        
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-          <div>
-             <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold' }}>DATA</label>
-             <input type="date" value={simData} onChange={e => setSimData(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', outline: 'none', marginTop: '4px', color: 'var(--text-h)' }} />
-          </div>
-          <div>
-             <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold' }}>CAIXINHA</label>
-             <select value={simCaixinha} onChange={e => setSimCaixinha(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', outline: 'none', marginTop: '4px', color: 'var(--text-h)' }}>
-               {caixinhasValidas.map((c: any) => (
-                 <option key={c.id} value={c.id}>{c.nome} (Sobra: {formatMoney(c.valor - (gastosPorCaixinha[c.id] || 0))})</option>
-               ))}
-             </select>
-          </div>
-        </div>
-        
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-h)', fontWeight: 'bold' }}>ITENS DO CUSTO</span>
-          
-          {simItems.map((item: any) => (
-            <div key={item.id} className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '20px', marginBottom: '12px', border: '1px solid var(--border)' }}>
-              
-              {/* ✨ Ajustei o alignItems: 'center' e mudei o botão da lixeira aqui */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center' }}>
-                <input type="text" value={item.nome} onChange={e => setSimItems(simItems.map((i:any) => i.id === item.id ? { ...i, nome: e.target.value } : i))} placeholder="Ex: Ingressos" style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', outline: 'none', color: 'var(--text-h)' }} />
-                
-                <input 
-                  type="text" 
-                  inputMode="numeric"
-                  value={formatMask(item.valor)} 
-                  onChange={e => handleItemValue(item.id, e)} 
-                  placeholder="0,00" 
-                  style={{ width: '90px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', outline: 'none', color: 'var(--text-h)', fontWeight: 'bold', textAlign: 'right' }} 
-                />
-                
-                <button 
-                  onClick={() => removerItem(item.id)} 
-                  style={{ background: 'transparent', border: 'none', padding: '0 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: '0.2s' }}
-                  title="Remover Item"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                </button>
-              </div>
+        <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px' }}></div>
+        <h3 style={{ margin: '0 0 24px 0', color: 'var(--text-h)', fontSize: '1.4rem' }}>{idEdicao ? 'Editar Passeio' : 'Novo Passeio'}</h3>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {['ambos', 'p1', 'p2'].map(opt => (
-                  <button key={opt} onClick={() => setSimItems(simItems.map((i:any) => i.id === item.id ? { ...i, responsavel: opt } : i))} style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '0.8rem', border: 'none', background: item.responsavel === opt ? 'var(--accent)' : 'var(--bg)', color: item.responsavel === opt ? '#fff' : 'var(--text)', fontWeight: 'bold', cursor: 'pointer' }}>
-                    {opt === 'ambos' ? 'Dividir' : opt === 'p1' ? parceiro1 : parceiro2}
-                  </button>
-                ))}
-              </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+          <div>
+            <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold' }}>TÍTULO DO ROLÊ</label>
+            <input type="text" value={simTitulo} onChange={e => setSimTitulo(e.target.value)} placeholder='Ex: Encontro "A", Boliche...' style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem' }} />
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold' }}>DATA</label>
+              <input type="date" value={simData} onChange={e => setSimData(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem' }} />
             </div>
-          ))}
-          
-          <button onClick={() => setSimItems([...simItems, { id: Date.now(), nome: '', valor: '', responsavel: 'ambos' }])} style={{ width: '100%', padding: '16px', background: 'transparent', border: '2px dashed var(--border)', color: 'var(--text)', borderRadius: '16px', fontWeight: 'bold', cursor: 'pointer' }}>
-            + Adicionar Item
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold' }}>CAIXINHA</label>
+              <select value={simCaixinha} onChange={e => setSimCaixinha(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem' }}>
+                {caixinhasValidas.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.nome}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold' }}>GASTOS DO ROLÊ</label>
+            <button onClick={adicionarItem} style={{ background: 'var(--accent)', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer' }}>+ Add Gasto</button>
+          </div>
+
+          <datalist id="lista-categorias">
+            {categoriasUnicas?.map((cat: string, index: number) => (
+              <option key={index} value={cat} />
+            ))}
+          </datalist>
+
+          {simItems.length === 0 ? (
+            <div className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '20px', border: '1px solid var(--border)' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold' }}>VALOR TOTAL ESTIMADO (R$)</label>
+              <input 
+                type="number" 
+                value={simEstimado} 
+                onChange={e => setSimEstimado(e.target.value)} 
+                placeholder="0,00" 
+                style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1.2rem', fontWeight: 'bold' }} 
+              />
+              <p style={{ margin: '8px 0 0 0', fontSize: '0.75rem', color: 'var(--text)' }}>
+                Se preferir detalhar cada gasto (ex: Ingresso, Pipoca), clique em <strong>+ Add Gasto</strong> acima.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {simItems.map((item: any, index: number) => (
+                <div key={item.id} className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '20px', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-h)' }}>Despesa {index + 1}</span>
+                    
+                    {/* ✨ LIXEIRA SEM FUNDO E BEM VISÍVEL */}
+                    <button onClick={() => removerItem(item.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }} title="Remover Despesa">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                    
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                    <input type="text" placeholder="Nome (Ex: Ingresso)" value={item.nome} onChange={e => atualizarItem(item.id, 'nome', e.target.value)} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)' }} />
+                    <input type="number" placeholder="R$ 0,00" value={item.valor} onChange={e => atualizarItem(item.id, 'valor', e.target.value)} style={{ width: '100px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)' }} />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <input 
+                      list="lista-categorias" 
+                      placeholder="Categoria (Ex: Comida)" 
+                      value={item.categoria || ''} 
+                      onChange={e => atualizarItem(item.id, 'categoria', e.target.value)} 
+                      style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', fontSize: '0.9rem' }} 
+                    />
+                    
+                    <div style={{ display: 'flex', gap: '4px', background: 'var(--bg)', padding: '6px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+                      <button onClick={() => atualizarItem(item.id, 'responsavel', 'ambos')} style={getBtnStyle(item.responsavel === 'ambos', '#8b5cf6')}>
+                        Dividido
+                      </button>
+                      <button onClick={() => atualizarItem(item.id, 'responsavel', 'p1')} style={getBtnStyle(item.responsavel === 'p1', corP1)}>
+                        {parceiro1}
+                      </button>
+                      <button onClick={() => atualizarItem(item.id, 'responsavel', 'p2')} style={getBtnStyle(item.responsavel === 'p2', corP2)}>
+                        {parceiro2}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--code-bg)', padding: '16px 20px', borderRadius: '20px', border: '1px solid var(--border)', marginBottom: '24px' }}>
+          <span style={{ color: 'var(--text)', fontWeight: 'bold' }}>Total Estimado:</span>
+          <span style={{ color: 'var(--accent)', fontWeight: '900', fontSize: '1.2rem' }}>{formatMoney(totalSimulacao)}</span>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px' }}>
+          {idEdicao && (
+            <button onClick={() => handleExcluirPlano(idEdicao)} disabled={isProcessando} style={{ padding: '16px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+              Excluir
+            </button>
+          )}
+          <button onClick={() => setSimuladorAberto(false)} disabled={isProcessando} style={{ flex: 1, padding: '16px', borderRadius: '16px', background: 'var(--code-bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', cursor: 'pointer' }}>
+            Cancelar
+          </button>
+          <button onClick={handleSalvarPlano} disabled={isProcessando || !simTitulo} style={{ flex: 2, padding: '16px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', opacity: (!simTitulo || isProcessando) ? 0.5 : 1 }}>
+            {isProcessando ? 'Salvando...' : 'Salvar Rolê'}
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
-          <button onClick={() => setSimuladorAberto(false)} style={{ flex: 1, padding: '18px', borderRadius: '16px', background: 'var(--code-bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', cursor: 'pointer' }}>Cancelar</button>
-          
-          <button onClick={handleSalvarPlano} disabled={isProcessando || !simTitulo} style={{ flex: 2, padding: '18px', borderRadius: '16px', background: (isProcessando || !simTitulo) ? 'var(--bg)' : 'var(--accent)', color: (isProcessando || !simTitulo) ? 'var(--text)' : '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>
-            {isProcessando ? 'Salvando...' : (totalSimulacao === 0 ? 'Agendar s/ Valor' : 'Salvar Passeio')}
-          </button>
-        </div>
-        
-        {idEdicao && (
-          <button onClick={() => handleExcluirPlano(idEdicao)} style={{ width: '100%', marginTop: '16px', background: 'transparent', border: 'none', color: '#ef4444', fontWeight: 'bold', cursor: 'pointer' }}>
-            Apagar Plano
-          </button>
-        )}
       </div>
     </div>,
     document.body
