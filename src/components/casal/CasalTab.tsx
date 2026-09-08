@@ -9,6 +9,7 @@ import { MetasScreen } from './MetasScreen';
 import { Desafio200Screen } from './Desafio200Screen';
 import { OnboardingCasal } from './OnboardingCasal';
 import { ConexaoScreen } from './ConexaoScreen';
+import { CasamentoHubScreen } from './CasamentoHubScreen';
 
 export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = ({ activeView = 'hub', setActiveView = () => {} }) => {
   const user = auth.currentUser;
@@ -292,7 +293,7 @@ export const CasalTab: React.FC<{ activeView?: string, setActiveView?: any }> = 
     case 'desafio200': return <Desafio200Screen {...screenProps} />;
     case 'metas': return <MetasScreen {...screenProps} />;
     case 'lazer': return <OrcamentoLivreScreen {...screenProps} />;
-    case 'conexao': return <ConexaoScreen {...screenProps} />;
+    case 'casamento': return <CasamentoHubScreen {...screenProps} />;
     default: return <HubScreen {...screenProps} />;
   }
 };

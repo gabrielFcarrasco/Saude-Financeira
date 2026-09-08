@@ -431,6 +431,40 @@ export const HubScreen = ({
         </button>
       </div>
 
+      <div 
+  onClick={() => setActiveView('casamento')} 
+  className="animate-fade-in"
+  style={{ 
+    background: 'linear-gradient(135deg, rgba(138, 43, 226, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%)', 
+    padding: '20px', 
+    borderRadius: '24px', 
+    border: '1px solid rgba(138, 43, 226, 0.2)', 
+    marginBottom: '24px', 
+    cursor: 'pointer', 
+    display: 'flex', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    boxShadow: '0 4px 15px rgba(138, 43, 226, 0.05)'
+  }}
+>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+    <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(138, 43, 226, 0.3)' }}>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <path d="M12 9a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"></path>
+  <polygon points="12 2 15 5 12 9 9 5"></polygon>
+  <line x1="9" y1="5" x2="15" y2="5"></line>
+</svg>
+    </div>
+    <div>
+      <h3 style={{ margin: '0 0 4px 0', color: 'var(--text-h)', fontSize: '1.1rem' }}>Nosso Casamento</h3>
+      <p style={{ margin: 0, color: 'var(--text)', fontSize: '0.85rem' }}>Planejamento, finanças e contratos</p>
+    </div>
+  </div>
+  <div style={{ color: 'var(--accent)' }}>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+  </div>
+</div>
+
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>Movimentações</h3>
