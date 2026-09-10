@@ -55,7 +55,7 @@ export const CasamentoModalMetas = ({
       const valorNum = Number(valorAporte);
       await addDoc(collection(db, 'casais', casalId, 'metaContribuicoes'), {
         valor: valorNum,
-        origem: origemAporte || 'Reserva',
+        origem: origemAporte || 'Reserva Pessoal',
         createdAt: serverTimestamp()
       });
       await updateDoc(doc(db, 'casais', casalId), {
@@ -66,7 +66,7 @@ export const CasamentoModalMetas = ({
   };
 
   const handleExcluirAporte = async (id: string, valorAporteRemovido: number) => {
-    if (!window.confirm("Remover esta contribuição? O valor será descontado do cofrinho.")) return;
+    if (!window.confirm("Remover este depósito? O valor será descontado do cofrinho.")) return;
     setIsProcessando(true);
     try {
       await deleteDoc(doc(db, 'casais', casalId, 'metaContribuicoes', id));
@@ -99,9 +99,20 @@ export const CasamentoModalMetas = ({
         
         {!formAberto ? (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Cofrinho do Casamento</h3>
               <button onClick={() => setMetasAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+            </div>
+
+            {/* MÓDULO DIDÁTICO */}
+            <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '16px', borderRadius: '20px', marginBottom: '24px' }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#10b981', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                O Poder da Meta
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text)', lineHeight: '1.5' }}>
+                O sistema lê o teto do seu casamento e divide pelo número de meses que faltam para o Grande Dia. O resultado é o valor exato que vocês precisam guardar juntos todos os meses para pagar a festa sem fazer dívidas.
+              </p>
             </div>
 
             <div style={{ background: 'var(--code-bg)', padding: '24px', borderRadius: '24px', border: '1px solid var(--border)', marginBottom: '16px' }}>
@@ -123,14 +134,14 @@ export const CasamentoModalMetas = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg)', padding: '12px 16px', borderRadius: '16px', border: '1px solid var(--border)' }}>
                 <div>
                   <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text)', textTransform: 'uppercase', fontWeight: 'bold' }}>Faltam {mesesRestantes} meses</span>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-h)' }}>Necessário guardar:</span>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-h)' }}>Necessário poupar:</span>
                 </div>
                 <span style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--accent)' }}>{formatMoney(aporteMensalNecessario)}<span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>/mês</span></span>
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto' }}>
-              <h4 style={{ margin: '8px 0', color: 'var(--text-h)', fontSize: '1rem' }}>Histórico de Aportes</h4>
+              <h4 style={{ margin: '8px 0', color: 'var(--text-h)', fontSize: '1rem' }}>Histórico de Poupança</h4>
               
               {contribuicoes.length === 0 ? (
                 <p style={{ textAlign: 'center', color: 'var(--text)', fontSize: '0.9rem', padding: '20px', background: 'var(--code-bg)', borderRadius: '20px' }}>Nenhum valor guardado ainda. Que tal fazer o primeiro depósito?</p>
@@ -160,7 +171,7 @@ export const CasamentoModalMetas = ({
             </div>
 
             <button onClick={abrirFormNovo} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: '#10b981', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', marginTop: '20px', cursor: 'pointer', flexShrink: 0 }}>
-              + Registrar Novo Aporte
+              + Registrar Dinheiro Guardado
             </button>
           </>
         ) : (
@@ -172,12 +183,12 @@ export const CasamentoModalMetas = ({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
               <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Valor a guardar (R$)</label>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Qual valor vocês separaram?</label>
                 <input type="text" inputMode="numeric" value={formatMask(valorAporte)} onChange={e => handleMask(e, setValorAporte)} placeholder="0,00" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: '#10b981', marginTop: '8px', fontSize: '1.3rem', fontWeight: 'bold', outline: 'none' }} />
               </div>
               <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Origem do Dinheiro</label>
-                <input type="text" value={origemAporte} onChange={e => setOrigemAporte(e.target.value)} placeholder="Ex: Salário de Setembro, 13º..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>De onde veio o dinheiro?</label>
+                <input type="text" value={origemAporte} onChange={e => setOrigemAporte(e.target.value)} placeholder="Ex: Salário, 13º, Bônus, Economia do mês..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
               </div>
             </div>
 

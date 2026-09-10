@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../services/firebase';
@@ -16,8 +16,8 @@ export const CasamentoModalConvidados = ({
   const [grupo, setGrupo] = useState('');
   const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState('pendente'); // pendente, confirmado, recusado
-  const [tipo, setTipo] = useState('adulto'); // adulto, crianca
+  const [status, setStatus] = useState('pendente'); 
+  const [tipo, setTipo] = useState('adulto'); 
   const [acompanhantesPermitidos, setAcompanhantesPermitidos] = useState(0);
   const [restricaoAlimentar, setRestricaoAlimentar] = useState('');
   const [mesa, setMesa] = useState('');
@@ -32,7 +32,7 @@ export const CasamentoModalConvidados = ({
   if (!convidadosAberto) return null;
 
   // Métricas
-  const total = convidados.length;
+  const totalConvitesGerados = convidados.reduce((acc: number, c: any) => acc + 1 + (c.acompanhantesPermitidos || 0), 0);
   const confirmados = convidados.filter((c: any) => c.status === 'confirmado').length;
   const pendentes = convidados.filter((c: any) => c.status === 'pendente').length;
   const recusados = convidados.filter((c: any) => c.status === 'recusado').length;
@@ -112,11 +112,19 @@ export const CasamentoModalConvidados = ({
               <button onClick={() => setConvidadosAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
             </div>
 
+            {/* MÓDULO DIDÁTICO */}
+            <div style={{ background: 'rgba(14, 165, 233, 0.05)', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '16px', borderRadius: '20px', marginBottom: '20px' }}>
+              <h4 style={{ margin: '0 0 4px 0', color: '#0ea5e9', fontSize: '0.85rem' }}>Importante: Gestão do Buffet</h4>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text)' }}>
+                Seu custo real é baseado no número de <strong>Pessoas Previstas</strong> (Convidados Cadastrados + Acompanhantes). Utilize o filtro de <em>Pendentes</em> para Pedir Confirmação 30 dias antes da festa.
+              </p>
+            </div>
+
             {/* MÉTRICAS */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '20px' }}>
               <div style={{ background: 'var(--code-bg)', padding: '12px 8px', borderRadius: '16px', textAlign: 'center', border: '1px solid var(--border)' }}>
-                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-h)' }}>{total}</span>
-                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Total</span>
+                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-h)' }}>{totalConvitesGerados}</span>
+                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Previstas</span>
               </div>
               <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '12px 8px', borderRadius: '16px', textAlign: 'center', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                 <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: '900', color: '#10b981' }}>{confirmados}</span>
@@ -162,7 +170,7 @@ export const CasamentoModalConvidados = ({
                     <div key={c.id} onClick={() => abrirFormEdicao(c)} style={{ background: 'var(--bg)', padding: '16px', borderRadius: '20px', border: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div>
                         <h4 style={{ margin: '0 0 4px 0', color: 'var(--text-h)', fontSize: '1rem' }}>{c.nome} {c.sobrenome}</h4>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold' }}>
                             {c.grupo || 'Sem Grupo'}
                           </span>
@@ -175,7 +183,7 @@ export const CasamentoModalConvidados = ({
                           {c.acompanhantesPermitidos > 0 && (
                             <>
                               <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--border)' }}></span>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text)' }}>+{c.acompanhantesPermitidos} convite(s)</span>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text)' }}>+{c.acompanhantesPermitidos} convite(s) extra(s)</span>
                             </>
                           )}
                         </div>
@@ -190,37 +198,44 @@ export const CasamentoModalConvidados = ({
             </div>
 
             <button onClick={abrirFormNovo} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', marginTop: '20px', cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 15px rgba(138, 43, 226, 0.3)' }}>
-              + Adicionar Convidado
+              + Adicionar Convidado ou Família
             </button>
           </>
         ) : (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.2rem' }}>{idEdicao ? 'Editar Convidado' : 'Novo Convidado'}</h3>
               <button onClick={() => setFormAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto', paddingBottom: '24px' }}>
               
+              {/* DICA DE ACOMPANHANTES */}
+              <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '12px', borderRadius: '16px' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text)', lineHeight: '1.4', display: 'block' }}>
+                  <strong>Como agrupar:</strong> Se você vai convidar um casal (ex: Tio João e Tia Maria), crie o contato como "Tio João" e coloque "1" no campo de Acompanhantes. Evite criar cadastros soltos para a mesma família.
+                </span>
+              </div>
+
               {/* DADOS BÁSICOS */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Nome</label>
-                  <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: João" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Nome Principal</label>
+                  <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Tio João" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Sobrenome</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Sobrenome / Família</label>
                   <input type="text" value={sobrenome} onChange={e => setSobrenome(e.target.value)} placeholder="Ex: Silva" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Grupo / Família</label>
-                  <input type="text" value={grupo} onChange={e => setGrupo(e.target.value)} placeholder="Ex: Família Silva" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Grupo</label>
+                  <input type="text" value={grupo} onChange={e => setGrupo(e.target.value)} placeholder="Ex: Trabalho, Padrinhos..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Telefone (WhatsApp)</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Telefone</label>
                   <input type="text" value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 9..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
                 </div>
               </div>
@@ -236,10 +251,10 @@ export const CasamentoModalConvidados = ({
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Tipo</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Idade</label>
                   <select value={tipo} onChange={e => setTipo(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }}>
-                    <option value="adulto">Adulto</option>
-                    <option value="crianca">Criança</option>
+                    <option value="adulto">Adulto (+12)</option>
+                    <option value="crianca">Criança (Não paga buffet)</option>
                   </select>
                 </div>
               </div>
@@ -262,8 +277,8 @@ export const CasamentoModalConvidados = ({
               </div>
 
               <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Observações</label>
-                <input type="text" value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Anotações internas..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Observações Internas</label>
+                <input type="text" value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Anotações só para vocês..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
               </div>
             </div>
 

@@ -66,15 +66,26 @@ export const CasamentoModalMesas = ({
         
         {!formAberto ? (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Acomodação (Mesas)</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Mapeamento de Mesas</h3>
               <button onClick={() => setMesasAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+            </div>
+
+            {/* MÓDULO DIDÁTICO */}
+            <div style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1px solid rgba(139, 92, 246, 0.2)', padding: '16px', borderRadius: '20px', marginBottom: '24px' }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#8b5cf6', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Por que organizar as mesas?
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text)', lineHeight: '1.5' }}>
+                Além de garantir que as famílias sentem juntas, marcar as mesas ajuda a equipe do buffet. Se vocês souberem que a "Mesa 05" tem 2 convidados veganos, o garçom entrega os pratos especiais direto para eles sem precisar ficar perguntando no salão.
+              </p>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto', paddingBottom: '24px' }}>
               {mesas.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '24px', background: 'var(--code-bg)', borderRadius: '24px', border: '1px dashed var(--border)' }}>
-                  <p style={{ color: 'var(--text)', fontSize: '0.9rem' }}>Nenhuma mesa configurada. Comece criando as mesas para organizar seus convidados.</p>
+                  <p style={{ color: 'var(--text)', fontSize: '0.9rem' }}>Nenhuma mesa criada ainda. Comece agrupando seus convidados por afinidade.</p>
                 </div>
               ) : (
                 mesas.map((m: any) => {
@@ -88,7 +99,7 @@ export const CasamentoModalMesas = ({
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                         <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem' }}>{m.nome}</h4>
                         <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: isOver ? '#ef4444' : 'var(--text)' }}>
-                          {totalPessoas} / {m.capacidade}
+                          {totalPessoas} / {m.capacidade} cadeiras
                         </span>
                       </div>
                       <div style={{ width: '100%', height: '6px', background: 'var(--bg)', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
@@ -97,10 +108,10 @@ export const CasamentoModalMesas = ({
                       <div style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
                         {convidadosNaMesa.length > 0 
                           ? convidadosNaMesa.map((c:any) => c.nome).join(', ') 
-                          : 'Mesa vazia'}
+                          : 'Ninguém alocado nesta mesa ainda.'}
                       </div>
                       {isOver && (
-                        <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#ef4444', fontWeight: 'bold' }}>Capacidade excedida!</div>
+                        <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#ef4444', fontWeight: 'bold' }}>Capacidade máxima excedida! Retire alguém desta mesa.</div>
                       )}
                     </div>
                   );
@@ -109,7 +120,7 @@ export const CasamentoModalMesas = ({
             </div>
 
             <button onClick={abrirFormNovo} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', marginTop: '12px', cursor: 'pointer', flexShrink: 0 }}>
-              + Nova Mesa
+              + Criar Nova Mesa
             </button>
           </>
         ) : (
@@ -121,15 +132,15 @@ export const CasamentoModalMesas = ({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
               <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Identificação da Mesa</label>
-                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Mesa 01, Família Silva..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Nome ou Número da Mesa</label>
+                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Mesa 01, Família da Noiva..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
               </div>
               <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Capacidade de Cadeiras</label>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Capacidade (Quantidade de Cadeiras)</label>
                 <input type="number" min="1" value={capacidade} onChange={e => setCapacidade(Number(e.target.value))} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text)', marginTop: '8px' }}>
-                Dica: Para alocar convidados nesta mesa, vá até o "Módulo de Convidados" e digite exatamente o nome desta mesa (<strong>{nome || '...'}</strong>) no cadastro do convidado.
+              <p style={{ fontSize: '0.8rem', color: 'var(--text)', marginTop: '8px', background: 'var(--code-bg)', padding: '12px', borderRadius: '12px', border: '1px dashed var(--border)' }}>
+                <strong>Como colocar as pessoas aqui:</strong> Volte na sua Lista de Convidados, edite um convidado e digite exatamente o nome desta mesa (<strong>{nome || '...'}</strong>) no cadastro dele.
               </p>
             </div>
 

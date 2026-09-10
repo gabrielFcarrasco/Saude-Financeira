@@ -81,21 +81,32 @@ export const CasamentoModalDocumentos = ({
         
         {!formAberto ? (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Documentos e Contratos</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Cofre de Documentos</h3>
               <button onClick={() => setDocumentosAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+            </div>
+
+            {/* MÓDULO DIDÁTICO */}
+            <div style={{ background: 'rgba(99, 102, 241, 0.05)', border: '1px solid rgba(99, 102, 241, 0.2)', padding: '16px', borderRadius: '20px', marginBottom: '24px' }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#6366f1', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                Não confie no WhatsApp!
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text)', lineHeight: '1.5' }}>
+                Arquivos enviados por mensagens expiram ou se perdem facilmente. Salve os contratos em PDF no seu Google Drive (ou similar) e cole o link aqui. Assim, ambos os noivos sempre terão acesso rápido aos contratos na palma da mão para qualquer eventualidade.
+              </p>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto' }}>
               {documentos.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '24px', background: 'var(--code-bg)', borderRadius: '24px', border: '1px dashed var(--border)' }}>
-                  <p style={{ color: 'var(--text)', fontSize: '0.9rem' }}>Nenhum documento anexado. Guarde links para seus contratos do Google Drive, PDFs ou fotos de recibos aqui.</p>
+                  <p style={{ color: 'var(--text)', fontSize: '0.9rem' }}>Nenhum link anexado ainda.</p>
                 </div>
               ) : (
                 documentos.map((d: any) => (
                   <div key={d.id} style={{ background: 'var(--bg)', padding: '16px', borderRadius: '20px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, overflow: 'hidden' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                       </div>
                       <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -119,7 +130,7 @@ export const CasamentoModalDocumentos = ({
             </div>
 
             <button onClick={abrirFormNovo} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', marginTop: '20px', cursor: 'pointer', flexShrink: 0 }}>
-              + Adicionar Documento
+              + Salvar Novo Documento
             </button>
           </>
         ) : (
@@ -132,7 +143,7 @@ export const CasamentoModalDocumentos = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto', paddingBottom: '24px' }}>
               <div>
                 <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Nome do Arquivo</label>
-                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Contrato Fotografia PDF" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Contrato Buffet Assinado" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -143,7 +154,7 @@ export const CasamentoModalDocumentos = ({
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Fornecedor Relacionado</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Vincular Fornecedor</label>
                   <select value={fornecedorId} onChange={e => setFornecedorId(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }}>
                     <option value="">Nenhum / Geral</option>
                     {fornecedores.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}
@@ -152,8 +163,9 @@ export const CasamentoModalDocumentos = ({
               </div>
 
               <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Link de Acesso (Drive, PDF web, etc)</label>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Link de Acesso Seguro (Drive, Dropbox)</label>
                 <input type="url" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--accent)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                <span style={{ fontSize: '0.7rem', color: 'var(--text)', display: 'block', marginTop: '6px' }}>Certifique-se de que o link do seu Drive não está restrito.</span>
               </div>
             </div>
 
@@ -163,12 +175,8 @@ export const CasamentoModalDocumentos = ({
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                 </button>
               )}
-              <button onClick={() => setFormAberto(false)} disabled={isProcessando} style={{ flex: 1, padding: '16px', borderRadius: '16px', background: 'var(--code-bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', cursor: 'pointer' }}>
-                Voltar
-              </button>
-              <button onClick={handleSalvar} disabled={isProcessando || !nome || !linkUrl} style={{ flex: 2, padding: '16px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', opacity: (!nome || !linkUrl || isProcessando) ? 0.5 : 1 }}>
-                {isProcessando ? 'Salvando...' : 'Salvar Arquivo'}
-              </button>
+              <button onClick={() => setFormAberto(false)} disabled={isProcessando} style={{ flex: 1, padding: '16px', borderRadius: '16px', background: 'var(--code-bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleSalvar} disabled={isProcessando || !nome || !linkUrl} style={{ flex: 2, padding: '16px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', opacity: (!nome || !linkUrl || isProcessando) ? 0.5 : 1 }}>Salvar Arquivo</button>
             </div>
           </div>
         )}

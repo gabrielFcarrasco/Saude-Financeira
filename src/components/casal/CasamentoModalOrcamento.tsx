@@ -4,12 +4,14 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
 const CATEGORIAS_PADRAO = [
-  { id: 'espaco', nome: 'Espaço / Local', cor: '#8b5cf6' },
-  { id: 'buffet', nome: 'Buffet / Bar', cor: '#f59e0b' },
+  { id: 'pacote', nome: 'Pacote Completo (Espaço + Extras)', cor: '#f43f5e' },
+  { id: 'espaco', nome: 'Apenas Espaço', cor: '#8b5cf6' },
+  { id: 'buffet', nome: 'Alimentação', cor: '#f59e0b' },
+  { id: 'assessoria', nome: 'Assessoria / Cerimonial', cor: '#14b8a6' },
   { id: 'foto', nome: 'Foto e Vídeo', cor: '#0ea5e9' },
-  { id: 'musica', nome: 'Banda / DJ', cor: '#ec4899' },
+  { id: 'musica', nome: 'Música / DJ', cor: '#ec4899' },
   { id: 'decoracao', nome: 'Decoração', cor: '#10b981' },
-  { id: 'vestuario', nome: 'Vestuário / Dia da Noiva', cor: '#f43f5e' },
+  { id: 'vestuario', nome: 'Vestuário / Beleza', cor: '#d946ef' },
   { id: 'outros', nome: 'Outros', cor: '#64748b' }
 ];
 
@@ -72,15 +74,26 @@ export const CasamentoModalOrcamento = ({
         
         <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px', flexShrink: 0 }}></div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Orçamento por Categoria</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Fatiar o Orçamento</h3>
           <button onClick={() => setOrcamentoAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+        </div>
+
+        {/* MÓDULO DIDÁTICO */}
+        <div style={{ background: 'rgba(14, 165, 233, 0.05)', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '16px', borderRadius: '20px', marginBottom: '24px' }}>
+          <h4 style={{ margin: '0 0 8px 0', color: '#0ea5e9', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            Como organizar pacotes?
+          </h4>
+          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text)', lineHeight: '1.5' }}>
+            Se vocês fecharam um local que já inclui comida e DJ, não tente dividir o valor exato. Coloque o valor total na categoria <strong>"Pacote Completo"</strong> e deixe as categorias de Alimentação e Música zeradas.
+          </p>
         </div>
 
         <div style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
             <div>
-              <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Disponível para distribuir</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Ainda não distribuído</span>
               <h2 style={{ margin: 0, color: restante >= 0 ? '#10b981' : '#ef4444', fontSize: '1.6rem' }}>{formatMoney(restante)}</h2>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -95,7 +108,7 @@ export const CasamentoModalOrcamento = ({
             <div key={cat.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg)', border: '1px solid var(--border)', padding: '16px', borderRadius: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: cat.cor }}></div>
-                <span style={{ fontWeight: 'bold', color: 'var(--text-h)' }}>{cat.nome}</span>
+                <span style={{ fontWeight: 'bold', color: 'var(--text-h)', fontSize: '0.95rem' }}>{cat.nome}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', background: 'var(--code-bg)', padding: '8px 16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
                 <span style={{ color: 'var(--text)', fontSize: '0.9rem', marginRight: '4px', fontWeight: 'bold' }}>R$</span>
@@ -113,7 +126,7 @@ export const CasamentoModalOrcamento = ({
         </div>
 
         <button onClick={handleSalvar} disabled={isProcessando || restante < 0} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer', opacity: (restante < 0 || isProcessando) ? 0.5 : 1, flexShrink: 0 }}>
-          {isProcessando ? 'Salvando...' : (restante < 0 ? 'Orçamento Estourado' : 'Salvar Distribuição')}
+          {isProcessando ? 'Salvando...' : (restante < 0 ? 'Reajuste os valores' : 'Salvar Distribuição')}
         </button>
 
       </div>

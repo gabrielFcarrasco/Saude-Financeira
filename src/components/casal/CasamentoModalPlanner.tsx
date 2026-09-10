@@ -4,16 +4,19 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from '
 import { db } from '../../services/firebase';
 
 const CATEGORIAS = [
-  { id: 'espaco', nome: 'Espaço / Local', cor: '#8b5cf6', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> },
-  { id: 'buffet', nome: 'Buffet / Bar', cor: '#f59e0b', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg> },
+  { id: 'pacote', nome: 'Pacote Completo', cor: '#f43f5e', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> },
+  { id: 'espaco', nome: 'Apenas Espaço', cor: '#8b5cf6', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> },
+  { id: 'buffet', nome: 'Alimentação', cor: '#f59e0b', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg> },
+  { id: 'assessoria', nome: 'Assessoria', cor: '#14b8a6', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg> },
   { id: 'foto', nome: 'Foto e Vídeo', cor: '#0ea5e9', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg> },
-  { id: 'musica', nome: 'Banda / DJ', cor: '#ec4899', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg> },
+  { id: 'musica', nome: 'Música / DJ', cor: '#ec4899', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg> },
   { id: 'decoracao', nome: 'Decoração', cor: '#10b981', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> },
+  { id: 'vestuario', nome: 'Vestuário / Beleza', cor: '#d946ef', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"></path></svg> },
   { id: 'outros', nome: 'Outros', cor: '#64748b', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg> }
 ];
 
 const STATUS_CONFIG: Record<string, { label: string, cor: string }> = {
-  pesquisando: { label: 'Pesquisando', cor: '#8b5cf6' },
+  pesquisando: { label: 'Em Pesquisa', cor: '#8b5cf6' },
   negociando: { label: 'Negociando', cor: '#f59e0b' },
   fechado: { label: 'Contrato Fechado', cor: '#10b981' }
 };
@@ -27,11 +30,12 @@ export const CasamentoModalPlanner = ({
   
   const [nome, setNome] = useState('');
   const [categoria, setCategoria] = useState('espaco');
+  const [itensInclusos, setItensInclusos] = useState('');
   const [status, setStatus] = useState('pesquisando');
-  const [valorInicial, setValorInicial] = useState(''); // ✨ NOVO: Valor da primeira proposta
-  const [valor, setValor] = useState(''); // Valor Final
+  const [valorInicial, setValorInicial] = useState(''); 
+  const [valor, setValor] = useState(''); 
   const [contato, setContato] = useState('');
-  const [temContratoAnexado, setTemContratoAnexado] = useState(false); // ✨ NOVO: Auditoria
+  const [temContratoAnexado, setTemContratoAnexado] = useState(false); 
 
   const [isProcessando, setIsProcessando] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState('todos');
@@ -49,13 +53,13 @@ export const CasamentoModalPlanner = ({
   };
 
   const abrirFormNovo = () => {
-    setIdEdicao(null); setNome(''); setCategoria('espaco'); setStatus('pesquisando'); 
+    setIdEdicao(null); setNome(''); setCategoria('espaco'); setItensInclusos(''); setStatus('pesquisando'); 
     setValorInicial(''); setValor(''); setContato(''); setTemContratoAnexado(false);
     setFormAberto(true);
   };
 
   const abrirFormEdicao = (f: any) => {
-    setIdEdicao(f.id); setNome(f.nome); setCategoria(f.categoria); setStatus(f.status); 
+    setIdEdicao(f.id); setNome(f.nome); setCategoria(f.categoria); setItensInclusos(f.itensInclusos || ''); setStatus(f.status); 
     setValorInicial(f.valorInicial ? f.valorInicial.toString() : '');
     setValor(f.valor ? f.valor.toString() : ''); 
     setContato(f.contato || '');
@@ -68,7 +72,7 @@ export const CasamentoModalPlanner = ({
     setIsProcessando(true);
     try {
       const payload = { 
-        nome, categoria, status, 
+        nome, categoria, itensInclusos, status, 
         valorInicial: Number(valorInicial || 0), 
         valor: Number(valor || 0), 
         contato, 
@@ -86,7 +90,7 @@ export const CasamentoModalPlanner = ({
   };
 
   const handleExcluir = async () => {
-    if (!idEdicao || !window.confirm("Apagar fornecedor?")) return;
+    if (!idEdicao || !window.confirm("Apagar orçamento/fornecedor?")) return;
     setIsProcessando(true);
     try {
       await deleteDoc(doc(db, 'casais', casalId, 'fornecedores', idEdicao));
@@ -106,7 +110,7 @@ export const CasamentoModalPlanner = ({
         {!formAberto ? (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Fornecedores</h3>
+              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Fornecedores & Orçamentos</h3>
               <button onClick={() => setPlannerAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
             </div>
 
@@ -136,7 +140,9 @@ export const CasamentoModalPlanner = ({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto' }}>
               {fornecedoresFiltrados.length === 0 ? (
-                <p style={{ textAlign: 'center', color: 'var(--text)', marginTop: '24px', fontSize: '0.9rem' }}>Nenhum fornecedor encontrado aqui.</p>
+                <div style={{ textAlign: 'center', padding: '24px', background: 'var(--code-bg)', borderRadius: '24px', border: '1px dashed var(--border)' }}>
+                  <p style={{ color: 'var(--text)', fontSize: '0.9rem' }}>Nenhum fornecedor aqui. Comece cadastrando orçamentos para poder compará-los antes de assinar contrato.</p>
+                </div>
               ) : (
                 fornecedoresFiltrados.map((f: any) => {
                   const cat = CATEGORIAS.find(c => c.id === f.categoria) || CATEGORIAS[CATEGORIAS.length - 1];
@@ -150,11 +156,14 @@ export const CasamentoModalPlanner = ({
                       </div>
                       <div style={{ flex: 1 }}>
                         <h4 style={{ margin: '0 0 4px 0', color: 'var(--text-h)', fontSize: '1rem' }}>{f.nome}</h4>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold' }}>{cat.nome}</span>
                           <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--border)' }}></span>
                           <span style={{ fontSize: '0.75rem', color: stat.cor, fontWeight: 'bold' }}>{stat.label}</span>
                         </div>
+                        {f.categoria === 'pacote' && f.itensInclusos && (
+                          <span style={{ display: 'block', marginTop: '4px', fontSize: '0.7rem', color: 'var(--text)' }}>Incluso: {f.itensInclusos}</span>
+                        )}
                         {economia > 0 && f.status === 'fechado' && (
                           <span style={{ display: 'inline-block', marginTop: '6px', fontSize: '0.65rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
                             Economia: {formatMoney(economia)}
@@ -177,7 +186,7 @@ export const CasamentoModalPlanner = ({
         ) : (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.2rem' }}>{idEdicao ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h3>
+              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.2rem' }}>{idEdicao ? 'Editar Fornecedor' : 'Adicionar Orçamento'}</h3>
               <button onClick={() => setFormAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
             </div>
 
@@ -195,21 +204,38 @@ export const CasamentoModalPlanner = ({
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Status</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Status Atual</label>
                   <select value={status} onChange={e => setStatus(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }}>
                     {Object.entries(STATUS_CONFIG).map(([key, conf]) => <option key={key} value={key}>{conf.label}</option>)}
                   </select>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>1ª Proposta (R$)</label>
-                  <input type="text" inputMode="numeric" value={formatMask(valorInicial)} onChange={(e) => handleMask(e, setValorInicial)} placeholder="0,00" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+              {categoria === 'pacote' && (
+                <div className="animate-fade-in">
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>O que está incluso nesse pacote?</label>
+                  <input type="text" value={itensInclusos} onChange={e => setItensInclusos(e.target.value)} placeholder="Ex: Espaço, Alimentação e DJ" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
                 </div>
-                <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Fechado por (R$)</label>
-                  <input type="text" inputMode="numeric" value={formatMask(valor)} onChange={(e) => handleMask(e, setValor)} placeholder="0,00" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--accent)', marginTop: '8px', fontSize: '1rem', fontWeight: 'bold', outline: 'none' }} />
+              )}
+
+              {/* CARD DIDÁTICO PARA NEGOCIAÇÃO */}
+              <div style={{ background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '16px', borderRadius: '20px', marginTop: '8px' }}>
+                <h4 style={{ margin: '0 0 8px 0', color: '#f59e0b', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                  Negociação e Economia
+                </h4>
+                <p style={{ margin: '0 0 16px 0', fontSize: '0.8rem', color: 'var(--text)', lineHeight: '1.4' }}>
+                  Preencha o valor da primeira proposta recebida. Quando vocês assinarem o contrato, preencha o valor final fechado para que o sistema calcule quanto vocês economizaram barganhando.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>1ª Proposta (R$)</label>
+                    <input type="text" inputMode="numeric" value={formatMask(valorInicial)} onChange={(e) => handleMask(e, setValorInicial)} placeholder="0,00" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '4px', fontSize: '1rem', outline: 'none' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Valor Final (R$)</label>
+                    <input type="text" inputMode="numeric" value={formatMask(valor)} onChange={(e) => handleMask(e, setValor)} placeholder="0,00" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--accent)', marginTop: '4px', fontSize: '1rem', fontWeight: 'bold', outline: 'none' }} />
+                  </div>
                 </div>
               </div>
 
@@ -229,7 +255,7 @@ export const CasamentoModalPlanner = ({
                   <div style={{ width: '24px', height: '24px', borderRadius: '6px', border: `2px solid ${temContratoAnexado ? '#10b981' : 'var(--text)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', background: temContratoAnexado ? '#10b981' : 'transparent' }}>
                     {temContratoAnexado && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
                   </div>
-                  <span style={{ fontWeight: 'bold', color: temContratoAnexado ? '#10b981' : 'var(--text)', fontSize: '0.9rem' }}>Contrato já assinado e anexado</span>
+                  <span style={{ fontWeight: 'bold', color: temContratoAnexado ? '#10b981' : 'var(--text)', fontSize: '0.9rem' }}>Contrato já assinado e link anexado</span>
                 </div>
               )}
             </div>

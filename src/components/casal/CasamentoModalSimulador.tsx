@@ -10,7 +10,6 @@ export const CasamentoModalSimulador = ({
   const [simGastosExtras, setSimGastosExtras] = useState('');
   const [simReducaoCustos, setSimReducaoCustos] = useState('');
 
-  // Ao abrir, puxa os valores REAIS para servirem de base
   useEffect(() => {
     if (simuladorAberto) {
       setSimTeto(tetoAtual ? tetoAtual.toString() : '0');
@@ -38,17 +37,12 @@ export const CasamentoModalSimulador = ({
   const extrasSimulados = Number(simGastosExtras || 0);
   const economiaSimulada = Number(simReducaoCustos || 0);
 
-  // Calcula o novo comprometimento (Real + Extras que a pessoa quer testar - Economias testadas)
   const novoComprometido = Math.max(0, valorComprometidoAtual + extrasSimulados - economiaSimulada);
-  
-  // Disponível Simulado
   const disponivelSimulado = tetoSimulado - novoComprometido;
 
-  // Custos por pessoa
   const custoPorPessoaReal = convidadosAtuais > 0 ? valorComprometidoAtual / convidadosAtuais : 0;
   const custoPorPessoaSimulado = qtdConvidadosSimulada > 0 ? novoComprometido / qtdConvidadosSimulada : 0;
 
-  // Diferença percentual no custo por pessoa
   const variacaoCustoPessoa = custoPorPessoaReal > 0 
     ? ((custoPorPessoaSimulado - custoPorPessoaReal) / custoPorPessoaReal) * 100 
     : 0;
@@ -59,15 +53,25 @@ export const CasamentoModalSimulador = ({
         
         <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px', flexShrink: 0 }}></div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
             <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l2-9 5 18 3-10 4 3h4"></path></svg>
               Simulador "E se...?"
             </h3>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>Brinque com os números. Nada será salvo no banco.</span>
           </div>
           <button onClick={() => setSimuladorAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+        </div>
+
+        {/* MÓDULO DIDÁTICO */}
+        <div style={{ background: 'rgba(138, 43, 226, 0.05)', border: '1px solid rgba(138, 43, 226, 0.2)', padding: '16px', borderRadius: '20px', marginBottom: '24px' }}>
+          <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            Ambiente Seguro (Sandbox)
+          </h4>
+          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text)', lineHeight: '1.5' }}>
+            Fiquem tranquilos, o que acontece aqui, fica aqui. Nenhum número digitado nesta tela vai alterar os orçamentos ou configurações reais do seu aplicativo. Usem este espaço para prever o impacto financeiro caso decidam convidar mais pessoas ou fechar contratos mais caros.
+          </p>
         </div>
 
         {/* INPUTS DE SIMULAÇÃO */}
@@ -87,11 +91,11 @@ export const CasamentoModalSimulador = ({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
               <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Se eu gastar MAIS (R$)</label>
-              <input type="text" inputMode="numeric" value={formatMask(simGastosExtras)} onChange={e => handleMask(e, setSimGastosExtras)} placeholder="Ex: Banda nova" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.3)', background: 'var(--bg)', color: '#ef4444', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+              <input type="text" inputMode="numeric" value={formatMask(simGastosExtras)} onChange={e => handleMask(e, setSimGastosExtras)} placeholder="Ex: Chopp Extra" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.3)', background: 'var(--bg)', color: '#ef4444', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
             </div>
             <div>
               <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Se eu economizar (R$)</label>
-              <input type="text" inputMode="numeric" value={formatMask(simReducaoCustos)} onChange={e => handleMask(e, setSimReducaoCustos)} placeholder="Ex: Corte no Bar" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)', background: 'var(--bg)', color: '#10b981', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+              <input type="text" inputMode="numeric" value={formatMask(simReducaoCustos)} onChange={e => handleMask(e, setSimReducaoCustos)} placeholder="Ex: Tirar Cabine de Fotos" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)', background: 'var(--bg)', color: '#10b981', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
             </div>
           </div>
         </div>

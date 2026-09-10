@@ -67,25 +67,36 @@ export const CasamentoModalPresentes = ({
         
         {!formAberto ? (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Lista de Presentes</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Presentes e Cotas Virtuais</h3>
               <button onClick={() => setPresentesAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+            </div>
+
+            {/* MÓDULO DIDÁTICO */}
+            <div style={{ background: 'rgba(236, 72, 153, 0.05)', border: '1px solid rgba(236, 72, 153, 0.2)', padding: '16px', borderRadius: '20px', marginBottom: '24px' }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#ec4899', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line></svg>
+                O que são Cotas Virtuais?
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text)', lineHeight: '1.5' }}>
+                Em vez de pedir dinheiro diretamente, divida a viagem ou a casa nova em "experiências". Exemplo: <strong>"Jantar Romântico - R$ 300"</strong>. O convidado se sente parte do momento, mas no fim, tudo cai como dinheiro na conta de vocês. Use esta tela para rastrear os recebimentos.
+              </p>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', marginBottom: '24px' }}>
               <div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Arrecadado</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Já Arrecadado</span>
                 <h2 style={{ margin: 0, color: '#ec4899', fontSize: '1.6rem' }}>{formatMoney(totalArrecadado)}</h2>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Meta Total</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Valor Total Esperado</span>
                 <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1rem' }}>{formatMoney(totalDesejado)}</h4>
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto' }}>
               {presentes.length === 0 ? (
-                <p style={{ textAlign: 'center', color: 'var(--text)', fontSize: '0.9rem' }}>Nenhuma cota ou presente registrado.</p>
+                <p style={{ textAlign: 'center', color: 'var(--text)', fontSize: '0.9rem' }}>Nenhuma cota registrada. Que tal criar uma cota para o "Mergulho de Lua de Mel"?</p>
               ) : (
                 presentes.map((p: any) => {
                   const perc = p.valorTotal > 0 ? ((p.arrecadado || 0) / p.valorTotal) * 100 : 0;
@@ -100,6 +111,7 @@ export const CasamentoModalPresentes = ({
                       <div style={{ width: '100%', height: '6px', background: 'var(--code-bg)', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ width: `${Math.min(perc, 100)}%`, height: '100%', background: perc >= 100 ? '#10b981' : '#ec4899' }}></div>
                       </div>
+                      {perc >= 100 && <span style={{ display: 'block', marginTop: '6px', fontSize: '0.75rem', color: '#10b981', fontWeight: 'bold' }}>Cota 100% atingida!</span>}
                     </div>
                   );
                 })
@@ -107,29 +119,29 @@ export const CasamentoModalPresentes = ({
             </div>
 
             <button onClick={abrirFormNovo} style={{ width: '100%', padding: '16px', borderRadius: '16px', background: '#ec4899', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', marginTop: '20px', cursor: 'pointer', flexShrink: 0 }}>
-              + Adicionar Item ou Cota
+              + Criar Experiência ou Presente
             </button>
           </>
         ) : (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.2rem' }}>{idEdicao ? 'Editar Cota' : 'Nova Cota de Presente'}</h3>
+              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.2rem' }}>{idEdicao ? 'Atualizar Arrecadação' : 'Criar Cota'}</h3>
               <button onClick={() => setFormAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
               <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>O que é?</label>
-                <input type="text" value={item} onChange={e => setItem(e.target.value)} placeholder="Ex: Cota Geladeira, Jantar Romântico..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Nome da Experiência ou Presente</label>
+                <input type="text" value={item} onChange={e => setItem(e.target.value)} placeholder="Ex: Passeio de Lancha, Geladeira, Ajuda para a Reforma..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
               </div>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Valor Total (R$)</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Valor Total Estipulado</label>
                   <input type="text" inputMode="numeric" value={formatMask(valorTotal)} onChange={e => handleMask(e, setValorTotal)} placeholder="0,00" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Já Arrecadado (R$)</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Valor já recebido (PIX, etc)</label>
                   <input type="text" inputMode="numeric" value={formatMask(arrecadado)} onChange={e => handleMask(e, setArrecadado)} placeholder="0,00" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: '#ec4899', fontWeight: 'bold', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
                 </div>
               </div>
@@ -142,7 +154,7 @@ export const CasamentoModalPresentes = ({
                 </button>
               )}
               <button onClick={() => setFormAberto(false)} disabled={isProcessando} style={{ flex: 1, padding: '16px', borderRadius: '16px', background: 'var(--code-bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={handleSalvar} disabled={isProcessando || !item} style={{ flex: 2, padding: '16px', borderRadius: '16px', background: '#ec4899', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', opacity: (!item || isProcessando) ? 0.5 : 1 }}>Salvar</button>
+              <button onClick={handleSalvar} disabled={isProcessando || !item} style={{ flex: 2, padding: '16px', borderRadius: '16px', background: '#ec4899', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', opacity: (!item || isProcessando) ? 0.5 : 1 }}>Salvar Dados</button>
             </div>
           </div>
         )}
