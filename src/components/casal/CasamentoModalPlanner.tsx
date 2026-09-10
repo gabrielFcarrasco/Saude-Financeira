@@ -24,19 +24,23 @@ export const CasamentoModalPlanner = ({
 
   const [formAberto, setFormAberto] = useState(false);
   const [idEdicao, setIdEdicao] = useState<string | null>(null);
+  
   const [nome, setNome] = useState('');
   const [categoria, setCategoria] = useState('espaco');
   const [status, setStatus] = useState('pesquisando');
-  const [valor, setValor] = useState('');
+  const [valorInicial, setValorInicial] = useState(''); // ✨ NOVO: Valor da primeira proposta
+  const [valor, setValor] = useState(''); // Valor Final
   const [contato, setContato] = useState('');
+  const [temContratoAnexado, setTemContratoAnexado] = useState(false); // ✨ NOVO: Auditoria
+
   const [isProcessando, setIsProcessando] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState('todos');
 
   if (!plannerAberto) return null;
 
-  const handleMask = (e: any) => {
+  const handleMask = (e: any, setter: any) => {
     const numbers = e.target.value.replace(/\D/g, '');
-    setValor(numbers ? (parseInt(numbers, 10) / 100).toFixed(2) : '');
+    setter(numbers ? (parseInt(numbers, 10) / 100).toFixed(2) : '');
   };
 
   const formatMask = (val: string | number) => {
@@ -45,12 +49,17 @@ export const CasamentoModalPlanner = ({
   };
 
   const abrirFormNovo = () => {
-    setIdEdicao(null); setNome(''); setCategoria('espaco'); setStatus('pesquisando'); setValor(''); setContato('');
+    setIdEdicao(null); setNome(''); setCategoria('espaco'); setStatus('pesquisando'); 
+    setValorInicial(''); setValor(''); setContato(''); setTemContratoAnexado(false);
     setFormAberto(true);
   };
 
   const abrirFormEdicao = (f: any) => {
-    setIdEdicao(f.id); setNome(f.nome); setCategoria(f.categoria); setStatus(f.status); setValor(f.valor ? f.valor.toString() : ''); setContato(f.contato || '');
+    setIdEdicao(f.id); setNome(f.nome); setCategoria(f.categoria); setStatus(f.status); 
+    setValorInicial(f.valorInicial ? f.valorInicial.toString() : '');
+    setValor(f.valor ? f.valor.toString() : ''); 
+    setContato(f.contato || '');
+    setTemContratoAnexado(f.temContratoAnexado || false);
     setFormAberto(true);
   };
 
@@ -58,12 +67,16 @@ export const CasamentoModalPlanner = ({
     if (!casalId || !nome) return;
     setIsProcessando(true);
     try {
-      const payload = { nome, categoria, status, valor: Number(valor || 0), contato, updatedAt: serverTimestamp() };
-      if (idEdicao) {
-        await updateDoc(doc(db, 'casais', casalId, 'fornecedores', idEdicao), payload);
-      } else {
-        await addDoc(collection(db, 'casais', casalId, 'fornecedores'), { ...payload, createdAt: serverTimestamp() });
-      }
+      const payload = { 
+        nome, categoria, status, 
+        valorInicial: Number(valorInicial || 0), 
+        valor: Number(valor || 0), 
+        contato, 
+        temContratoAnexado,
+        updatedAt: serverTimestamp() 
+      };
+      if (idEdicao) await updateDoc(doc(db, 'casais', casalId, 'fornecedores', idEdicao), payload);
+      else await addDoc(collection(db, 'casais', casalId, 'fornecedores'), { ...payload, createdAt: serverTimestamp() });
       setFormAberto(false);
     } catch (e) {
       console.error(e);
@@ -128,6 +141,8 @@ export const CasamentoModalPlanner = ({
                 fornecedoresFiltrados.map((f: any) => {
                   const cat = CATEGORIAS.find(c => c.id === f.categoria) || CATEGORIAS[CATEGORIAS.length - 1];
                   const stat = STATUS_CONFIG[f.status];
+                  const economia = (f.valorInicial || 0) - (f.valor || 0);
+
                   return (
                     <div key={f.id} onClick={() => abrirFormEdicao(f)} style={{ background: 'var(--bg)', padding: '16px', borderRadius: '20px', border: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: `${cat.cor}15`, color: cat.cor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -136,12 +151,15 @@ export const CasamentoModalPlanner = ({
                       <div style={{ flex: 1 }}>
                         <h4 style={{ margin: '0 0 4px 0', color: 'var(--text-h)', fontSize: '1rem' }}>{f.nome}</h4>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            {cat.nome}
-                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold' }}>{cat.nome}</span>
                           <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--border)' }}></span>
                           <span style={{ fontSize: '0.75rem', color: stat.cor, fontWeight: 'bold' }}>{stat.label}</span>
                         </div>
+                        {economia > 0 && f.status === 'fechado' && (
+                          <span style={{ display: 'inline-block', marginTop: '6px', fontSize: '0.65rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                            Economia: {formatMoney(economia)}
+                          </span>
+                        )}
                       </div>
                       <div style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--text-h)' }}>
                         {f.valor ? formatMoney(f.valor) : '--'}
@@ -166,17 +184,17 @@ export const CasamentoModalPlanner = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto', paddingBottom: '24px' }}>
               <div>
                 <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Nome da Empresa / Profissional</label>
-                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Chácara Recanto, DJ Silva..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                <input type="text" value={nome} onChange={e => setNome(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
               </div>
 
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Categoria</label>
                   <select value={categoria} onChange={e => setCategoria(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }}>
                     {CATEGORIAS.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
                 </div>
-                <div style={{ flex: 1 }}>
+                <div>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Status</label>
                   <select value={status} onChange={e => setStatus(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }}>
                     {Object.entries(STATUS_CONFIG).map(([key, conf]) => <option key={key} value={key}>{conf.label}</option>)}
@@ -184,15 +202,36 @@ export const CasamentoModalPlanner = ({
                 </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Valor Total do Serviço (R$)</label>
-                <input type="text" inputMode="numeric" value={formatMask(valor)} onChange={handleMask} placeholder="0,00" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--accent)', marginTop: '8px', fontSize: '1.2rem', fontWeight: 'bold', outline: 'none' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>1ª Proposta (R$)</label>
+                  <input type="text" inputMode="numeric" value={formatMask(valorInicial)} onChange={(e) => handleMask(e, setValorInicial)} placeholder="0,00" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Fechado por (R$)</label>
+                  <input type="text" inputMode="numeric" value={formatMask(valor)} onChange={(e) => handleMask(e, setValor)} placeholder="0,00" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--accent)', marginTop: '8px', fontSize: '1rem', fontWeight: 'bold', outline: 'none' }} />
+                </div>
               </div>
 
+              {Number(valorInicial) > Number(valor) && Number(valor) > 0 && (
+                <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '12px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 'bold', textAlign: 'center' }}>
+                  🎉 Economia de {formatMoney(Number(valorInicial) - Number(valor))} gerada!
+                </div>
+              )}
+
               <div>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Link ou Contato (Opcional)</label>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Link ou Contato</label>
                 <input type="text" value={contato} onChange={e => setContato(e.target.value)} placeholder="Instagram, Site, WhatsApp..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
               </div>
+
+              {status === 'fechado' && (
+                <div onClick={() => setTemContratoAnexado(!temContratoAnexado)} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: temContratoAnexado ? 'rgba(16, 185, 129, 0.1)' : 'var(--code-bg)', border: `1px solid ${temContratoAnexado ? '#10b981' : 'var(--border)'}`, padding: '16px', borderRadius: '16px', cursor: 'pointer', transition: '0.2s' }}>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '6px', border: `2px solid ${temContratoAnexado ? '#10b981' : 'var(--text)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', background: temContratoAnexado ? '#10b981' : 'transparent' }}>
+                    {temContratoAnexado && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                  </div>
+                  <span style={{ fontWeight: 'bold', color: temContratoAnexado ? '#10b981' : 'var(--text)', fontSize: '0.9rem' }}>Contrato já assinado e anexado</span>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
