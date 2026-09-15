@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, doc, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
-// IMPORTAÇÃO DOS 15 MODAIS (Fases 1 a 8)
+// IMPORTAÇÃO DOS MODAIS (Fases 1 a 8)
 import { CasamentoModalSetup } from './CasamentoModalSetup';
 import { CasamentoModalOrcamento } from './CasamentoModalOrcamento';
 import { CasamentoModalConvidados } from './CasamentoModalConvidados';
@@ -18,6 +18,7 @@ import { CasamentoModalSimulador } from './CasamentoModalSimulador';
 import { CasamentoModalIA } from './CasamentoModalIA';
 import { CasamentoModalPagamentos } from './CasamentoModalPagamentos';
 import { CasamentoModalPosCasamento } from './CasamentoModalPosCasamento';
+import { CasamentoModalMuralIdeias } from './CasamentoModalMuralIdeias';
 
 const CATEGORIAS_PADRAO = [
   { id: 'espaco', nome: 'Espaço', cor: '#8b5cf6' },
@@ -58,6 +59,9 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
   const [iaAberto, setIaAberto] = useState(false);
   const [pagamentosAberto, setPagamentosAberto] = useState(false);
   const [posCasamentoAberto, setPosCasamentoAberto] = useState(false);
+  
+  // NOVO ESTADO: Mural Especial
+  const [muralAberto, setMuralAberto] = useState(false);
   
   const [carregando, setCarregando] = useState(true);
 
@@ -117,7 +121,6 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
   const convidadosConfirmados = convidados.filter(c => c.status === 'confirmado').length;
   
   const custoBaseadoReal = totalConvidados > 0 ? (valorComprometido / totalConvidados) : 0;
-  const custoBaseadoTeto = totalConvidados > 0 ? (tetoCasamento / totalConvidados) : 0;
   
   const hojeDate = new Date();
   const proximaSemanaDate = new Date();
@@ -185,6 +188,40 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
           </button>
         </div>
       </div>
+
+      {/* NOVO BLOCO: MURAL ESPECIAL EM DESTAQUE NO TOPO */}
+      <button 
+        onClick={() => setMuralAberto(true)} 
+        className="animate-fade-in"
+        style={{ 
+          width: '100%', 
+          background: 'linear-gradient(135deg, #ff7eb3 0%, #ff758c 100%)', 
+          border: 'none', 
+          padding: '24px', 
+          borderRadius: '24px', 
+          marginBottom: '24px', 
+          cursor: 'pointer', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          boxShadow: '0 10px 25px rgba(255, 117, 140, 0.4)',
+          transition: 'transform 0.2s',
+          textAlign: 'left'
+        }}
+      >
+        <div>
+          <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px', textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+            Mural Especial
+          </h3>
+          <p style={{ margin: 0, color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem', fontWeight: '500' }}>
+            Momentos, inspirações e nossa jornada até o altar.
+          </p>
+        </div>
+        <div style={{ background: 'rgba(255,255,255,0.25)', padding: '14px', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </div>
+      </button>
 
       {/* AVISO DISCRETO CASO NÃO TENHA DADOS (NÃO BLOQUEIA MAIS A TELA) */}
       {(!dataCasamento || tetoCasamento === 0) && (
@@ -360,7 +397,7 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
         Gerar Relatório Final Auditado
       </button>
 
-      {/* RENDERIZAÇÃO INVISÍVEL DOS 15 MODAIS */}
+      {/* RENDERIZAÇÃO INVISÍVEL DOS MODAIS */}
       <CasamentoModalSetup setupAberto={setupAberto} setSetupAberto={setSetupAberto} casalId={casalId} dataAtual={dataCasamento} tetoAtual={tetoCasamento} />
       <CasamentoModalOrcamento orcamentoAberto={orcamentoAberto} setOrcamentoAberto={setOrcamentoAberto} casalId={casalId} tetoCasamento={tetoCasamento} categoriasPlanejado={categoriasPlanejado} formatMoney={formatMoney} />
       <CasamentoModalConvidados convidadosAberto={convidadosAberto} setConvidadosAberto={setConvidadosAberto} casalId={casalId} convidados={convidados} />
@@ -376,6 +413,7 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
       <CasamentoModalPagamentos pagamentosAberto={pagamentosAberto} setPagamentosAberto={setPagamentosAberto} casalId={casalId} fornecedores={fornecedores} formatMoney={formatMoney} />
       <CasamentoModalPosCasamento posCasamentoAberto={posCasamentoAberto} setPosCasamentoAberto={setPosCasamentoAberto} formatMoney={formatMoney} tetoCasamento={tetoCasamento} valorComprometido={valorComprometido} valorPago={valorPago} fornecedores={fornecedores} convidados={convidados} tarefas={tarefas} dataCasamento={dataCasamento} />
       <CasamentoModalIA iaAberto={iaAberto} setIaAberto={setIaAberto} fornecedores={fornecedores} tetoCasamento={tetoCasamento} valorComprometido={valorComprometido} diasRestantes={diasRestantes} formatMoney={formatMoney} tarefas={tarefas} convidados={convidados} valorPoupado={valorPoupado} parcelasProximas={parcelasProximas} parcelasAtrasadas={parcelasAtrasadas} />
+     <CasamentoModalMuralIdeias muralAberto={muralAberto} setMuralAberto={setMuralAberto} casalId={casalId} />
 
     </div>
   );
