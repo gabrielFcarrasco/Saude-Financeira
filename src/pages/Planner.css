@@ -1,5 +1,5 @@
 /* =========================================
-   MOBILE-FIRST APP DESIGN SYSTEM
+   SISTEMA HÍBRIDO RESPONSIVO (MOBILE & PC AMPLIADO)
    ========================================= */
 :root {
   --bg: #f8fafc;
@@ -12,27 +12,26 @@
   --radius: 24px;
 }
 
-/* Força a tela a ter o tamanho exato do celular e impede que o fundo "pule" */
+/* Configuração base de layout */
 html, body, #root {
   margin: 0;
   padding: 0;
   height: 100%;
   width: 100%;
-  overflow: hidden; 
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--bg);
   color: var(--text-h);
-  overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
 }
 
 .mobile-app-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh;
   width: 100%;
   position: relative;
   background: var(--bg);
+  box-sizing: border-box;
 }
 
 .app-header {
@@ -51,7 +50,7 @@ html, body, #root {
   color: var(--accent);
 }
 
-/* ✨ SOLUÇÃO DOS MODAIS: Removemos o -webkit-overflow-scrolling que os aprisionava! */
+/* Área de conteúdo rolável */
 .mobile-app-content {
   flex: 1;
   overflow-y: auto;
@@ -59,15 +58,15 @@ html, body, #root {
   box-sizing: border-box;
 }
 
-/* ✨ SOLUÇÃO DA ROLAGEM CORTADA: Um bloco físico que garante o espaço no fundo */
+/* Espaçador para o menu inferior no mobile */
 .scroll-spacer {
-  height: 130px;
+  height: 100px;
   width: 100%;
   flex-shrink: 0;
   pointer-events: none;
 }
 
-/* O MENU INFERIOR */
+/* O MENU INFERIOR (Padrão Mobile) */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -102,9 +101,11 @@ html, body, #root {
 .bottom-nav-item.active .bottom-nav-icon { transform: scale(1.15); }
 .bottom-nav-label { font-size: 0.65rem; font-weight: 600; }
 
-::-webkit-scrollbar { width: 0px; height: 0px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
 
-/* CARTÕES */
+/* CARTÕES E ELEMENTOS */
 .card, .hub-balance-card {
   background: var(--code-bg);
   border-radius: var(--radius);
@@ -136,12 +137,59 @@ button.primary:active { transform: scale(0.97); }
 .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
-/* MÁGICA DO PC */
+/* =========================================================
+   VERSÃO DE COMPUTADOR (DESKTOP - Telas maiores que 768px)
+   ========================================================= */
 @media (min-width: 768px) {
-  body { background: #0f172a; display: flex; justify-content: center; align-items: center; }
-  .mobile-app-container {
-    width: 400px; height: 850px; border-radius: 40px; border: 8px solid #1e293b;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden;
+  body {
+    background-color: var(--bg);
+    overflow: auto;
   }
-  .bottom-nav { position: absolute; }
+
+  /* Container ampliado para formato de painel desktop (1400px) */
+  .mobile-app-container {
+    max-width: 1800px;
+    height: 100vh;
+    margin: 0 auto;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    box-shadow: 0 0 50px rgba(0,0,0,0.04);
+  }
+
+  /* Conteúdo com respiro ideal para monitores */
+  .mobile-app-content {
+    padding: 32px 50px 0 50px;
+  }
+
+  /* Menu inferior adaptado e com ALTO CONTRASTE para desktop */
+  .bottom-nav {
+    left: 50%;
+    transform: translateX(-50%);
+    width: 750px;
+    height: 80px;
+    background: #ffffff; /* Fundo totalmente opaco e limpo */
+    border: 1px solid var(--border);
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.12); /* Sombra marcada para dar profundidade */
+  }
+
+  .bottom-nav-item {
+    transition: all 0.2s ease;
+    border-radius: 16px;
+    margin: 6px;
+  }
+
+  .bottom-nav-item:hover {
+    background: rgba(139, 92, 246, 0.08); /* Efeito subtil ao passar o rato */
+  }
+
+  .bottom-nav-label {
+    font-size: 0.75rem; /* Texto mais legível no computador */
+    font-weight: 700;
+  }
+
+  .scroll-spacer {
+    height: 105px;
+  }
 }
