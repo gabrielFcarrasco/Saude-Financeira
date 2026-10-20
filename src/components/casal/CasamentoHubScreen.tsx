@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { collection, doc, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
-// IMPORTAÇÃO DOS MODAIS (Fases 1 a 8)
+// IMPORTAÇÃO DOS MODAIS
 import { CasamentoModalSetup } from './CasamentoModalSetup';
 import { CasamentoModalOrcamento } from './CasamentoModalOrcamento';
 import { CasamentoModalConvidados } from './CasamentoModalConvidados';
-import { CasamentoModalChecklist } from './CasamentoModalChecklist';
+import { CasamentoModalChecklist, calcularUrgenciaTarefa, normalizarFase } from './CasamentoModalChecklist';
 import { CasamentoModalCronograma } from './CasamentoModalCronograma';
 import { CasamentoModalDocumentos } from './CasamentoModalDocumentos';
 import { CasamentoModalPlanner } from './CasamentoModalPlanner';
@@ -82,12 +82,14 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
 
   // --- CÁLCULOS E FORMATAÇÃO DE DATA ---
   let diasRestantes = 0;
+  let diasRestantesVal: number | null = null;
   let dataFormatada = 'Data a definir';
   
   if (dataCasamento) {
     const dataAlvo = new Date(dataCasamento + 'T12:00:00');
     const hoje = new Date();
     diasRestantes = Math.ceil((dataAlvo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+    diasRestantesVal = diasRestantes;
     
     const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
     dataFormatada = `${dataAlvo.getDate()} de ${meses[dataAlvo.getMonth()]} de ${dataAlvo.getFullYear()}`;
@@ -97,17 +99,42 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
   const fornecedoresFechados = fornecedores.filter(f => f.status === 'fechado');
   const valorComprometido = fornecedoresFechados.reduce((acc, f) => acc + Number(f.valor || 0), 0);
   const valorPago = fornecedoresFechados.reduce((acc, f) => acc + (f.parcelas?.filter((p:any) => p.pago).reduce((s:any, p:any) => s + p.valor, 0) || 0), 0);
-  const valorDisponivel = tetoCasamento - valorComprometido;
+  const valorDisponivel = tetoCasamento > 0 ? (tetoCasamento - valorComprometido) : 0;
 
   const economiaTotal = fornecedoresFechados.reduce((acc, f) => {
     const eco = (Number(f.valorInicial) || 0) - (Number(f.valor) || 0);
     return acc + (eco > 0 ? eco : 0);
   }, 0);
 
-  const totalConvidados = convidados.length;
-  const convidadosPendentes = convidados.filter(c => c.status === 'pendente').length;
-  const convidadosConfirmados = convidados.filter(c => c.status === 'confirmado').length;
-  const custoBaseadoReal = totalConvidados > 0 ? (valorComprometido / totalConvidados) : 0;
+  // --- CÁLCULO INDIVIDUAL DE PESSOAS VS CONVITES ---
+  let totalPessoasReais = 0;
+  let convidadosConfirmados = 0;
+  let convidadosPendentes = 0;
+  let convidadosRecusados = 0;
+
+  convidados.forEach((c: any) => {
+    if (c.membros && Array.isArray(c.membros) && c.membros.length > 0) {
+      c.membros.forEach((m: any) => {
+        totalPessoasReais++;
+        if (m.status === 'confirmado') convidadosConfirmados++;
+        else if (m.status === 'recusado') convidadosRecusados++;
+        else convidadosPendentes++;
+      });
+    } else {
+      // Compatibilidade com registros legados sem lista de membros
+      const st = c.status || 'pendente';
+      const acomp = Number(c.acompanhantesPermitidos || 0);
+      const qtdNesteConvite = 1 + acomp;
+      
+      totalPessoasReais += qtdNesteConvite;
+      if (st === 'confirmado') convidadosConfirmados += qtdNesteConvite;
+      else if (st === 'recusado') convidadosRecusados += qtdNesteConvite;
+      else convidadosPendentes += qtdNesteConvite;
+    }
+  });
+
+  const totalConvitesGrupos = convidados.length;
+  const custoBaseadoReal = totalPessoasReais > 0 ? (valorComprometido / totalPessoasReais) : 0;
   
   const hojeDate = new Date();
   const proximaSemanaDate = new Date();
@@ -129,16 +156,39 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
     }
   });
 
-  const tarefasUrgentes = tarefas.filter(t => t.status !== 'concluida' && t.prioridade === 'Urgente').length;
+  // SEPARAÇÃO INTELIGENTE DE TAREFAS URGENTES / FOCO DO MÊS
+  const todasTarefasUrgentes = tarefas
+    .filter(t => t.status !== 'concluida')
+    .map(t => ({ ...t, urgInfo: calcularUrgenciaTarefa(t, diasRestantesVal) }))
+    .filter(t => t.urgInfo.ehUrgente);
 
+  // Ordena para que tarefas Em Atraso fiquem no topo
+  const orderMap: Record<string, number> = { 'atrasada': 1, 'foco': 2, 'urgente': 3 };
+  todasTarefasUrgentes.sort((a, b) => (orderMap[a.urgInfo.nivel] || 4) - (orderMap[b.urgInfo.nivel] || 4));
+
+  const tarefasUrgentesContagem = todasTarefasUrgentes.length;
+  const tarefasAtrasadasContagem = todasTarefasUrgentes.filter(t => t.urgInfo.nivel === 'atrasada').length;
+  const tarefasUrgentesLista = todasTarefasUrgentes.slice(0, 3);
+
+  // CÁLCULO PRECISO DE SAÚDE FINANCEIRA
   let scoreSaude = 100;
+
   if (tetoCasamento > 0) {
     if (valorComprometido > tetoCasamento) scoreSaude -= 40;
     else if (valorComprometido > tetoCasamento * 0.9) scoreSaude -= 15;
   }
-  scoreSaude -= (parcelasAtrasadas * 10) + (contratosPendentes * 5) + (tarefasUrgentes * 5);
-  scoreSaude -= (convidadosPendentes > 0 && diasRestantes < 30) ? 10 : 0;
-  scoreSaude = Math.max(0, scoreSaude);
+
+  scoreSaude -= (parcelasAtrasadas * 15);
+  scoreSaude -= (tarefasAtrasadasContagem * 5);
+  
+  const penalidadeContratos = Math.min(20, contratosPendentes * 3);
+  scoreSaude -= penalidadeContratos;
+
+  if (convidadosPendentes > 0 && diasRestantesVal !== null && diasRestantesVal < 30) {
+    scoreSaude -= 10;
+  }
+
+  scoreSaude = Math.max(0, Math.min(100, scoreSaude));
 
   let saudeLabel = 'Excelente'; let saudeCor = '#10b981';
   if (scoreSaude < 50) { saudeLabel = 'Crítico'; saudeCor = '#ef4444'; }
@@ -159,7 +209,7 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
         </button>
       </div>
 
-      {/* ✨ HERO CARD REFINADO (COM FUNDO DEGRADÊ, FONTES LIMPAS E TEXTO BRANCO) ✨ */}
+      {/* HERO CARD */}
       <div className="animate-fade-in" style={{ 
         background: 'linear-gradient(135deg, var(--accent) 0%, #6366f1 100%)', 
         borderRadius: '32px', 
@@ -174,24 +224,13 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
         <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', filter: 'blur(30px)' }}></div>
         <div style={{ position: 'absolute', bottom: '-40px', left: '-20px', width: '150px', height: '150px', background: 'rgba(0,0,0,0.15)', borderRadius: '50%', filter: 'blur(30px)' }}></div>
         
-        <span style={{ 
-          display: 'inline-block', fontSize: '0.75rem', textTransform: 'uppercase', 
-          letterSpacing: '2px', fontWeight: '800', color: '#ffffff', opacity: 0.9, marginBottom: '12px' 
-        }}>
-          O Grande Dia
-        </span>
+        <span style={{ display: 'inline-block', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: '800', color: '#ffffff', opacity: 0.9, marginBottom: '12px' }}>O Grande Dia</span>
 
         {dataCasamento ? (
           <div>
-            <h1 style={{ margin: '0 0 4px 0', fontSize: '3.8rem', fontWeight: '900', color: '#ffffff', lineHeight: '1', textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
-              {diasRestantes < 0 ? 'Chegou!' : diasRestantes}
-            </h1>
-            <span style={{ display: 'block', fontSize: '0.9rem', color: '#ffffff', opacity: 0.9, fontWeight: '600', marginBottom: '20px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-              {diasRestantes < 0 ? 'O grande momento aconteceu.' : diasRestantes === 1 ? 'dia restante' : 'dias restantes'}
-            </span>
-            <div style={{ display: 'inline-block', background: 'rgba(255, 255, 255, 0.15)', padding: '8px 20px', borderRadius: '16px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.25)', fontWeight: '600', fontSize: '0.9rem', color: '#ffffff' }}>
-               {dataFormatada}
-            </div>
+            <h1 style={{ margin: '0 0 4px 0', fontSize: '3.8rem', fontWeight: '900', color: '#ffffff', lineHeight: '1', textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>{diasRestantes < 0 ? 'Chegou!' : diasRestantes}</h1>
+            <span style={{ display: 'block', fontSize: '0.9rem', color: '#ffffff', opacity: 0.9, fontWeight: '600', marginBottom: '20px', textTransform: 'uppercase', letterSpacing: '1px' }}>{diasRestantes < 0 ? 'O grande momento aconteceu.' : diasRestantes === 1 ? 'dia restante' : 'dias restantes'}</span>
+            <div style={{ display: 'inline-block', background: 'rgba(255, 255, 255, 0.15)', padding: '8px 20px', borderRadius: '16px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.25)', fontWeight: '600', fontSize: '0.9rem', color: '#ffffff' }}>{dataFormatada}</div>
           </div>
         ) : (
           <div>
@@ -201,12 +240,10 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
         )}
       </div>
 
-      {/* MURAL ESPECIAL (BANNER) */}
+      {/* MURAL ESPECIAL */}
       <button onClick={() => setMuralAberto(true)} className="animate-fade-in" style={{ width: '100%', background: 'linear-gradient(90deg, #ff7eb3 0%, #ff758c 100%)', border: 'none', padding: '20px 24px', borderRadius: '24px', marginBottom: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 8px 20px rgba(255, 117, 140, 0.3)', transition: 'transform 0.2s', textAlign: 'left' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ background: 'rgba(255,255,255,0.25)', padding: '12px', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" stroke="none" color="#fff"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-          </div>
+          <div style={{ background: 'rgba(255,255,255,0.25)', padding: '12px', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" stroke="none" color="#fff"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></div>
           <div>
             <h3 style={{ margin: '0 0 4px 0', color: '#fff', fontSize: '1.2rem', textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>Mural Especial</h3>
             <p style={{ margin: 0, color: 'rgba(255,255,255,0.95)', fontSize: '0.85rem' }}>Nossas inspirações e jornada.</p>
@@ -264,44 +301,85 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
         </div>
       </div>
 
-      {/* PAINEL: CONVIDADOS E CUSTO REAL */}
+      {/* PAINEL: CONVIDADOS E CUSTO REAL POR PESSOA */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-        <div style={{ background: 'var(--bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
+        <div onClick={() => setConvidadosAberto(true)} style={{ background: 'var(--bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 15px rgba(0,0,0,0.03)', cursor: 'pointer' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
             <div style={{ background: 'rgba(14, 165, 233, 0.1)', padding: '6px', borderRadius: '8px', color: '#0ea5e9' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             </div>
             <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1rem' }}>Convidados</h3>
           </div>
-          <h2 style={{ margin: '0 0 12px 0', fontSize: '1.8rem', color: 'var(--text-h)' }}>{totalConvidados}</h2>
+          
+          <h2 style={{ margin: '0 0 2px 0', fontSize: '1.8rem', color: 'var(--text-h)', fontWeight: '900' }}>
+            {totalPessoasReais} <span style={{ fontSize: '0.85rem', color: 'var(--text)', fontWeight: 'normal' }}>pessoas</span>
+          </h2>
+          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text)', marginBottom: '12px' }}>
+            em {totalConvitesGrupos} {totalConvitesGrupos === 1 ? 'convite / família' : 'convites / famílias'}
+          </span>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>{convidadosConfirmados} Confirmados</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }}></div>{convidadosPendentes} Pendentes</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>
+              {convidadosConfirmados} Confirmados
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }}></div>
+              {convidadosPendentes} Pendentes
+            </div>
           </div>
         </div>
 
         <div style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', justifyContent: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: '900', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '1px' }}>Custo / Pessoa</span>
           <h3 style={{ margin: 0, color: 'var(--accent)', fontSize: '1.5rem' }}>{formatMoney(custoBaseadoReal)}</h3>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text)', marginTop: '8px' }}>Valor dividido pelo total de convidados previstos.</span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text)', marginTop: '8px' }}>
+            Valor contratado ÷ {totalPessoasReais} pessoas.
+          </span>
         </div>
       </div>
 
-      {/* ALERTAS */}
-      {(parcelasAtrasadas > 0 || parcelasProximas.length > 0 || contratosPendentes > 0 || contratosSemAnexo > 0 || (dataCasamento && convidadosPendentes > 0 && diasRestantes < 30) || tarefasUrgentes > 0) && (
+      {/* FOCO IMEDIATO (URGÊNCIAS DINÂMICAS) */}
+      {tarefasUrgentesLista.length > 0 && (
+        <div className="animate-fade-in" style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ display: 'inline-flex', width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', animation: 'pulse 2s infinite' }}></span>
+              Foco Imediato
+            </h3>
+            <button onClick={() => setChecklistAberto(true)} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer' }}>Ver todas ({tarefasUrgentesContagem})</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {tarefasUrgentesLista.map(tarefa => {
+              const info = tarefa.urgInfo;
+              return (
+                 <div key={tarefa.id} onClick={() => setChecklistAberto(true)} style={{ background: 'var(--code-bg)', border: `1px solid ${info.cor}40`, borderLeft: `4px solid ${info.cor}`, padding: '16px', borderRadius: '16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: '0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                   <div>
+                     <span style={{ display: 'block', fontWeight: 'bold', color: 'var(--text-h)', fontSize: '0.95rem' }}>{tarefa.titulo || tarefa.nome || 'Tarefa'}</span>
+                     <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>{normalizarFase(tarefa.fase)} • {tarefa.categoria || 'Geral'}</span>
+                   </div>
+                   <div style={{ background: `${info.cor}15`, color: info.cor, padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                     {info.badge}
+                   </div>
+                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ALERTAS OPERACIONAIS */}
+      {(parcelasAtrasadas > 0 || parcelasProximas.length > 0 || contratosPendentes > 0 || contratosSemAnexo > 0 || (dataCasamento && convidadosPendentes > 0 && diasRestantes < 30)) && (
         <div className="animate-fade-in" style={{ background: 'rgba(239, 68, 68, 0.05)', padding: '24px', borderRadius: '24px', border: '1px solid rgba(239, 68, 68, 0.2)', marginBottom: '32px' }}>
           <h3 style={{ margin: '0 0 16px 0', color: '#ef4444', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '10px', height: '10px', background: '#ef4444', borderRadius: '50%', animation: 'pulse 1.5s infinite' }}></div>
             Atenção Necessária
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {parcelasAtrasadas > 0 && <div style={{ fontSize: '0.85rem', color: 'var(--text-h)', display: 'flex', gap: '8px' }}><span style={{ color: '#ef4444', fontWeight: 'bold' }}>•</span> <span><strong>{parcelasAtrasadas}</strong> parcela(s) em atraso!</span></div>}
             {contratosPendentes > 0 && <div style={{ fontSize: '0.85rem', color: 'var(--text-h)', display: 'flex', gap: '8px' }}><span style={{ color: '#f59e0b', fontWeight: 'bold' }}>•</span> <span><strong>{contratosPendentes}</strong> fornecedor(es) sem cronograma gerado.</span></div>}
             {contratosSemAnexo > 0 && <div style={{ fontSize: '0.85rem', color: 'var(--text-h)', display: 'flex', gap: '8px' }}><span style={{ color: '#ef4444', fontWeight: 'bold' }}>•</span> <span><strong>{contratosSemAnexo}</strong> fornecedor(es) sem contrato em anexo.</span></div>}
-            {tarefasUrgentes > 0 && <div style={{ fontSize: '0.85rem', color: 'var(--text-h)', display: 'flex', gap: '8px' }}><span style={{ color: '#ef4444', fontWeight: 'bold' }}>•</span> <span><strong>{tarefasUrgentes}</strong> tarefa(s) Urgentes na Checklist.</span></div>}
             {parcelasProximas.length > 0 && <div style={{ fontSize: '0.85rem', color: 'var(--text-h)', display: 'flex', gap: '8px' }}><span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>•</span> <span><strong>{parcelasProximas.length}</strong> parcela(s) vencendo nos próximos 7 dias.</span></div>}
-            {(dataCasamento && convidadosPendentes > 0 && diasRestantes < 30) && <div style={{ fontSize: '0.85rem', color: 'var(--text-h)', display: 'flex', gap: '8px' }}><span style={{ color: '#ef4444', fontWeight: 'bold' }}>•</span> <span>Faltando 1 mês, há <strong>{convidadosPendentes}</strong> convidados pendentes.</span></div>}
+            {(dataCasamento && convidadosPendentes > 0 && diasRestantes < 30) && <div style={{ fontSize: '0.85rem', color: 'var(--text-h)', display: 'flex', gap: '8px' }}><span style={{ color: '#ef4444', fontWeight: 'bold' }}>•</span> <span>Faltando 1 mês, há <strong>{convidadosPendentes}</strong> pessoas pendentes de RSVP.</span></div>}
           </div>
         </div>
       )}
@@ -352,11 +430,18 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
       <div style={{ marginBottom: '32px' }}>
         <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-h)', fontSize: '1.2rem' }}>Planejamento & Estratégia</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <button onClick={() => setChecklistAberto(true)} style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', padding: '20px', borderRadius: '24px', cursor: 'pointer', textAlign: 'left', transition: '0.2s', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' }}>
+          
+          <button onClick={() => setChecklistAberto(true)} style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', padding: '20px', borderRadius: '24px', cursor: 'pointer', textAlign: 'left', transition: '0.2s', boxShadow: '0 4px 15px rgba(0,0,0,0.02)', position: 'relative' }}>
+            {tarefasUrgentesContagem > 0 && (
+              <div style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#ef4444', color: '#fff', fontSize: '0.7rem', fontWeight: 'bold', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--bg)', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                {tarefasUrgentesContagem}
+              </div>
+            )}
             <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg></div>
             <span style={{ display: 'block', fontWeight: 'bold', color: 'var(--text-h)', fontSize: '1rem', marginBottom: '4px' }}>Checklist</span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text)' }}>Tarefas do evento</span>
           </button>
+          
           <button onClick={() => setCronogramaAberto(true)} style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', padding: '20px', borderRadius: '24px', cursor: 'pointer', textAlign: 'left', transition: '0.2s', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' }}>
             <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
             <span style={{ display: 'block', fontWeight: 'bold', color: 'var(--text-h)', fontSize: '1rem', marginBottom: '4px' }}>O Grande Dia</span>
@@ -396,7 +481,7 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
         Gerar Relatório Final Auditado
       </button>
 
-      {/* RENDERIZAÇÃO INVISÍVEL DOS MODAIS */}
+      {/* RENDERIZAÇÃO DOS MODAIS */}
       <CasamentoModalSetup setupAberto={setupAberto} setSetupAberto={setSetupAberto} casalId={casalId} dataAtual={dataCasamento} tetoAtual={tetoCasamento} />
       <CasamentoModalOrcamento orcamentoAberto={orcamentoAberto} setOrcamentoAberto={setOrcamentoAberto} casalId={casalId} tetoCasamento={tetoCasamento} categoriasPlanejado={categoriasPlanejado} formatMoney={formatMoney} />
       <CasamentoModalConvidados convidadosAberto={convidadosAberto} setConvidadosAberto={setConvidadosAberto} casalId={casalId} convidados={convidados} />
@@ -408,7 +493,7 @@ export const CasamentoHubScreen = ({ casalId, formatMoney }: any) => {
       <CasamentoModalLuaDeMel luaDeMelAberto={luaDeMelAberto} setLuaDeMelAberto={setLuaDeMelAberto} casalId={casalId} formatMoney={formatMoney} />
       <CasamentoModalPresentes presentesAberto={presentesAberto} setPresentesAberto={setPresentesAberto} casalId={casalId} formatMoney={formatMoney} />
       <CasamentoModalMetas metasAberto={metasAberto} setMetasAberto={setMetasAberto} casalId={casalId} formatMoney={formatMoney} tetoCasamento={tetoCasamento} dataCasamento={dataCasamento} />
-      <CasamentoModalSimulador simuladorAberto={simuladorAberto} setSimuladorAberto={setSimuladorAberto} formatMoney={formatMoney} tetoAtual={tetoCasamento} valorComprometidoAtual={valorComprometido} convidadosAtuais={convidados.length} />
+      <CasamentoModalSimulador simuladorAberto={simuladorAberto} setSimuladorAberto={setSimuladorAberto} formatMoney={formatMoney} tetoAtual={tetoCasamento} valorComprometidoAtual={valorComprometido} convidadosAtuais={totalPessoasReais} />
       <CasamentoModalPagamentos pagamentosAberto={pagamentosAberto} setPagamentosAberto={setPagamentosAberto} casalId={casalId} fornecedores={fornecedores} formatMoney={formatMoney} />
       <CasamentoModalPosCasamento posCasamentoAberto={posCasamentoAberto} setPosCasamentoAberto={setPosCasamentoAberto} formatMoney={formatMoney} tetoCasamento={tetoCasamento} valorComprometido={valorComprometido} valorPago={valorPago} fornecedores={fornecedores} convidados={convidados} tarefas={tarefas} dataCasamento={dataCasamento} />
       <CasamentoModalIA iaAberto={iaAberto} setIaAberto={setIaAberto} fornecedores={fornecedores} tetoCasamento={tetoCasamento} valorComprometido={valorComprometido} diasRestantes={diasRestantes} formatMoney={formatMoney} tarefas={tarefas} convidados={convidados} valorPoupado={valorPoupado} parcelasProximas={parcelasProximas} parcelasAtrasadas={parcelasAtrasadas} />

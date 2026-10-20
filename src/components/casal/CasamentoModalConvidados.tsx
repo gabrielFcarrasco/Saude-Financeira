@@ -11,6 +11,18 @@ const CATEGORIAS_CONVITE = [
   'Crianças', 'Staff', 'Outros'
 ];
 
+// Regra de Isenção do Buffet: Crianças até 7 anos e bebês NÃO PAGAM
+export const ehPaganteBuffet = (tipo: string, idade?: number | string) => {
+  if (tipo === 'bebe' || tipo === 'staff') return false;
+  if (tipo === 'crianca') {
+    if (idade !== undefined && idade !== null && String(idade).trim() !== '') {
+      return Number(idade) > 7;
+    }
+    return false; // Por padrão, se não definiu idade, assume até 7 anos (isento)
+  }
+  return true; // Adultos pagam
+};
+
 export const CasamentoModalConvidados = ({
   convidadosAberto, setConvidadosAberto, casalId, convidados
 }: any) => {
@@ -19,33 +31,30 @@ export const CasamentoModalConvidados = ({
   const [idEdicao, setIdEdicao] = useState<string | null>(null);
   const [isProcessando, setIsProcessando] = useState(false);
 
-  // --- ESTADOS DO NOVO FORMULÁRIO (Baseado em "Convites / Famílias") ---
-  const [nomeConvite, setNomeConvite] = useState(''); // Ex: "Família Silva"
+  // --- ESTADOS DO FORMULÁRIO ---
+  const [nomeConvite, setNomeConvite] = useState('');
   const [categoria, setCategoria] = useState('Família Noiva');
   const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
   const [mesa, setMesa] = useState('');
   const [observacoes, setObservacoes] = useState('');
   
-  // Lista dinâmica de pessoas dentro deste convite
   const [membros, setMembros] = useState<any[]>([]);
 
-  // --- ESTADOS DA LISTAGEM ---
+  // --- FILTROS ---
   const [filtroCategoria, setFiltroCategoria] = useState('Todas');
   const [busca, setBusca] = useState('');
 
-  // 1. NORMALIZAÇÃO DE DADOS (Garante que convidados antigos funcionem no novo modelo)
+  // 1. NORMALIZAÇÃO DE DADOS
   const listaNormalizada = useMemo(() => {
     return convidados.map((c: any) => {
-      if (c.membros) return c; // Já está no formato novo
+      if (c.membros) return c;
       
-      // Converte o formato antigo para o formato de "Família"
       const membrosConvertidos = [
-        { id: 'titular', nome: c.nome, tipo: c.tipo || 'adulto', status: c.status || 'pendente', restricao: c.restricaoAlimentar || '' }
+        { id: 'titular', nome: c.nome, tipo: c.tipo || 'adulto', idade: c.idade || '', status: c.status || 'pendente', restricao: c.restricaoAlimentar || '' }
       ];
-      // Adiciona acompanhantes antigos como membros genéricos
       for (let i = 0; i < (c.acompanhantesPermitidos || 0); i++) {
-        membrosConvertidos.push({ id: `extra_${i}`, nome: `Acompanhante ${i+1}`, tipo: 'adulto', status: c.status || 'pendente', restricao: '' });
+        membrosConvertidos.push({ id: `extra_${i}`, nome: `Acompanhante ${i+1}`, tipo: 'adulto', idade: '', status: c.status || 'pendente', restricao: '' });
       }
 
       return {
@@ -57,35 +66,61 @@ export const CasamentoModalConvidados = ({
     });
   }, [convidados]);
 
-  // 2. MÉTRICAS (Contando pessoas reais dentro dos convites)
+  // 2. MÉTRICAS RESUMIDAS E LIMPbullet
   const metricas = useMemo(() => {
-    let total = 0; let confirmados = 0; let pendentes = 0; let recusados = 0;
+    let totalPessoas = 0;
+    let totalPagantes = 0;
+    let totalIsentos = 0;
+    let totalCriancas = 0;
+    let confirmados = 0;
+
     listaNormalizada.forEach((convite: any) => {
       convite.membros.forEach((m: any) => {
-        total++;
+        totalPessoas++;
+
+        const pagante = ehPaganteBuffet(m.tipo, m.idade);
+        if (pagante) totalPagantes++;
+        else totalIsentos++;
+
+        if (m.tipo === 'crianca' || m.tipo === 'bebe') totalCriancas++;
         if (m.status === 'confirmado') confirmados++;
-        else if (m.status === 'recusado') recusados++;
-        else pendentes++;
       });
     });
-    return { total, confirmados, pendentes, recusados };
+
+    return { totalPessoas, totalPagantes, totalIsentos, totalCriancas, confirmados };
   }, [listaNormalizada]);
 
-  const convitesFiltrados = listaNormalizada.filter((c: any) => {
-    const atendeCategoria = filtroCategoria === 'Todas' || c.categoria === filtroCategoria;
-    const atendeBusca = c.nomeConvite?.toLowerCase().includes(busca.toLowerCase()) ||
-                        c.membros.some((m:any) => m.nome.toLowerCase().includes(busca.toLowerCase()));
-    return atendeCategoria && atendeBusca;
-  });
+  // 3. FILTRAGEM INTELIGENTE POR CATEGORIA (INCLUINDO "CRIANÇAS")
+  const convitesFiltrados = useMemo(() => {
+    const buscaClean = busca.toLowerCase().trim();
+
+    return listaNormalizada.filter((c: any) => {
+      // Pesquisa textual por nome do convite ou integrante
+      const atendeBusca = !buscaClean || 
+        c.nomeConvite?.toLowerCase().includes(buscaClean) ||
+        c.membros.some((m: any) => m.nome?.toLowerCase().includes(buscaClean));
+
+      if (!atendeBusca) return false;
+
+      // Filtro de Categoria:
+      // Se for "Todas", exibe tudo.
+      // Se for "Crianças", puxa automaticamente qualquer convite/família que tenha criança ou bebê.
+      // Caso contrário, filtra pela categoria salva na família.
+      if (filtroCategoria === 'Todas') return true;
+      if (filtroCategoria === 'Crianças') {
+        return c.membros.some((m: any) => m.tipo === 'crianca' || m.tipo === 'bebe');
+      }
+      return c.categoria === filtroCategoria;
+    });
+  }, [listaNormalizada, filtroCategoria, busca]);
 
   if (!convidadosAberto) return null;
 
-  // --- FUNÇÕES DO FORMULÁRIO ---
+  // --- CONTROLES DO FORMULÁRIO ---
   const abrirFormNovo = () => {
     setIdEdicao(null); 
     setNomeConvite(''); setCategoria('Família Noiva'); setTelefone(''); setEmail(''); setMesa(''); setObservacoes('');
-    // Começa com 1 membro vazio
-    setMembros([{ id: Date.now().toString(), nome: '', tipo: 'adulto', status: 'pendente', restricao: '' }]);
+    setMembros([{ id: Date.now().toString(), nome: '', tipo: 'adulto', idade: '', status: 'pendente', restricao: '' }]);
     setFormAberto(true);
   };
 
@@ -99,10 +134,10 @@ export const CasamentoModalConvidados = ({
   };
 
   const adicionarMembro = () => {
-    setMembros([...membros, { id: Date.now().toString(), nome: '', tipo: 'adulto', status: 'pendente', restricao: '' }]);
+    setMembros([...membros, { id: Date.now().toString(), nome: '', tipo: 'adulto', idade: '', status: 'pendente', restricao: '' }]);
   };
 
-  const atualizarMembro = (id: string, campo: string, valor: string) => {
+  const atualizarMembro = (id: string, campo: string, valor: any) => {
     setMembros(membros.map(m => m.id === id ? { ...m, [campo]: valor } : m));
   };
 
@@ -143,112 +178,139 @@ export const CasamentoModalConvidados = ({
 
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div className="animate-slide-up" style={{ background: 'var(--bg)', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '750px', padding: '32px 24px', maxHeight: '95vh', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <div className="animate-slide-up" style={{ background: 'var(--bg)', borderRadius: '32px 32px 0 0', width: '100%', maxWidth: '750px', padding: '24px 20px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
         
-        <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 24px', flexShrink: 0 }}></div>
+        {/* BARRA DE ARRASTE */}
+        <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '10px', margin: '0 auto 16px', flexShrink: 0 }}></div>
         
         {!formAberto ? (
           <>
-            {/* CABEÇALHO DA LISTAGEM */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            {/* CABEÇALHO */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexShrink: 0 }}>
               <div>
-                <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.4rem' }}>Gestor de Convidados</h3>
-                <p style={{ margin: '4px 0 0 0', color: 'var(--text)', fontSize: '0.85rem' }}>Agrupe por famílias e controle confirmações individualmente.</p>
+                <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.3rem' }}>Lista de Convidados</h3>
+                <p style={{ margin: '2px 0 0 0', color: 'var(--text)', fontSize: '0.8rem' }}>Gestão de famílias e cálculo do buffet.</p>
               </div>
               <button onClick={() => setConvidadosAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
             </div>
 
-            {/* MÉTRICAS GERAIS */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
-              <div style={{ background: 'var(--code-bg)', padding: '16px 8px', borderRadius: '20px', textAlign: 'center', border: '1px solid var(--border)' }}>
-                <span style={{ display: 'block', fontSize: '1.4rem', fontWeight: '900', color: 'var(--text-h)' }}>{metricas.total}</span>
-                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Total Pessoas</span>
+            {/* PAINEL DE MÉTRICAS COMPACTO */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px', flexShrink: 0 }}>
+              <div style={{ background: 'var(--code-bg)', padding: '12px 6px', borderRadius: '16px', textAlign: 'center', border: '1px solid var(--border)' }}>
+                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-h)' }}>{metricas.totalPessoas}</span>
+                <span style={{ fontSize: '0.6rem', fontWeight: 'bold', color: 'var(--text)', textTransform: 'uppercase' }}>Total</span>
               </div>
-              <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '16px 8px', borderRadius: '20px', textAlign: 'center', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                <span style={{ display: 'block', fontSize: '1.4rem', fontWeight: '900', color: '#10b981' }}>{metricas.confirmados}</span>
-                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#10b981', textTransform: 'uppercase' }}>Confirmados</span>
+              <div style={{ background: 'rgba(138, 43, 226, 0.1)', padding: '12px 6px', borderRadius: '16px', textAlign: 'center', border: '1px solid rgba(138, 43, 226, 0.2)' }}>
+                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: '900', color: 'var(--accent)' }}>{metricas.totalPagantes}</span>
+                <span style={{ fontSize: '0.6rem', fontWeight: 'bold', color: 'var(--accent)', textTransform: 'uppercase' }}>Pagantes</span>
               </div>
-              <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '16px 8px', borderRadius: '20px', textAlign: 'center', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-                <span style={{ display: 'block', fontSize: '1.4rem', fontWeight: '900', color: '#f59e0b' }}>{metricas.pendentes}</span>
-                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#f59e0b', textTransform: 'uppercase' }}>Pendentes</span>
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '12px 6px', borderRadius: '16px', textAlign: 'center', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: '900', color: '#10b981' }}>{metricas.totalIsentos}</span>
+                <span style={{ fontSize: '0.6rem', fontWeight: 'bold', color: '#10b981', textTransform: 'uppercase' }}>Isentos ≤7a</span>
               </div>
-              <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '16px 8px', borderRadius: '20px', textAlign: 'center', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                <span style={{ display: 'block', fontSize: '1.4rem', fontWeight: '900', color: '#ef4444' }}>{metricas.recusados}</span>
-                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#ef4444', textTransform: 'uppercase' }}>Faltas</span>
+              <div style={{ background: 'rgba(14, 165, 233, 0.1)', padding: '12px 6px', borderRadius: '16px', textAlign: 'center', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
+                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: '900', color: '#0ea5e9' }}>{metricas.totalCriancas}</span>
+                <span style={{ fontSize: '0.6rem', fontWeight: 'bold', color: '#0ea5e9', textTransform: 'uppercase' }}>Crianças</span>
               </div>
             </div>
 
-            {/* BARRA DE PESQUISA E FILTROS */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', background: 'var(--code-bg)', borderRadius: '16px', padding: '0 16px', border: '1px solid var(--border)' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            {/* BARRA DE PESQUISA E CATEGORIAS */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', background: 'var(--code-bg)', borderRadius: '14px', padding: '0 14px', border: '1px solid var(--border)' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 <input 
-                  type="text" placeholder="Pesquisar família ou nome do convidado..." value={busca} onChange={(e) => setBusca(e.target.value)}
-                  style={{ flex: 1, padding: '16px', border: 'none', background: 'transparent', color: 'var(--text-h)', outline: 'none', fontSize: '0.95rem' }}
+                  type="text" placeholder="Buscar por nome da família ou convidado..." value={busca} onChange={(e) => setBusca(e.target.value)}
+                  style={{ flex: 1, padding: '12px', border: 'none', background: 'transparent', color: 'var(--text-h)', outline: 'none', fontSize: '0.85rem' }}
                 />
               </div>
-              
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
+
+              {/* BARRA ÚNICA DE CATEGORIAS */}
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
                 {['Todas', ...CATEGORIAS_CONVITE].map(cat => (
-                  <button key={cat} onClick={() => setFiltroCategoria(cat)} style={{ padding: '8px 16px', borderRadius: '12px', whiteSpace: 'nowrap', border: filtroCategoria === cat ? 'none' : '1px solid var(--border)', background: filtroCategoria === cat ? 'var(--accent)' : 'transparent', color: filtroCategoria === cat ? '#fff' : 'var(--text)', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer', transition: '0.2s' }}>
-                    {cat}
+                  <button 
+                    key={cat} 
+                    onClick={() => setFiltroCategoria(cat)} 
+                    style={{ 
+                      padding: '6px 12px', 
+                      borderRadius: '10px', 
+                      whiteSpace: 'nowrap', 
+                      border: filtroCategoria === cat ? 'none' : '1px solid var(--border)', 
+                      background: filtroCategoria === cat ? 'var(--accent)' : 'var(--code-bg)', 
+                      color: filtroCategoria === cat ? '#fff' : 'var(--text)', 
+                      fontWeight: 'bold', 
+                      fontSize: '0.75rem', 
+                      cursor: 'pointer' 
+                    }}
+                  >
+                    {cat} {cat === 'Crianças' ? `(${metricas.totalCriancas})` : ''}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* LISTAGEM DE CONVITES (FAMÍLIAS) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+            {/* LISTAGEM FLUIDA DE CONVITES (ÁREA ROLÁVEL) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px' }}>
               {convitesFiltrados.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text)' }}>
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" style={{ marginBottom: '16px', opacity: 0.5 }}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                  <p>Nenhum convite encontrado para esta categoria.</p>
+                <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text)' }}>
+                  <p style={{ margin: 0, fontSize: '0.85rem' }}>Nenhum convidado encontrado para este filtro.</p>
                 </div>
               ) : (
                 convitesFiltrados.map((convite: any) => {
-                  
-                  // Resumo dos status dentro deste convite
-                  const total = convite.membros.length;
-                  const conf = convite.membros.filter((m:any) => m.status === 'confirmado').length;
-                  const rec = convite.membros.filter((m:any) => m.status === 'recusado').length;
-                  const pend = total - conf - rec;
+                  const totalMembros = convite.membros.length;
+                  const totalIsentosConvite = convite.membros.filter((m: any) => !ehPaganteBuffet(m.tipo, m.idade)).length;
 
                   return (
-                    <div key={convite.id} onClick={() => abrirFormEdicao(convite)} className="animate-fade-in" style={{ background: 'var(--bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '12px', transition: 'transform 0.2s', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' }}>
+                    <div key={convite.id} onClick={() => abrirFormEdicao(convite)} className="animate-fade-in" style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '20px', border: '1px solid var(--border)', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       
                       {/* Topo do Card */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <span style={{ fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', color: 'var(--accent)', letterSpacing: '1px' }}>{convite.categoria}</span>
-                          <h4 style={{ margin: '4px 0 0 0', color: 'var(--text-h)', fontSize: '1.15rem' }}>{convite.nomeConvite}</h4>
+                          <span style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', color: 'var(--accent)', letterSpacing: '0.5px' }}>{convite.categoria}</span>
+                          <h4 style={{ margin: '2px 0 0 0', color: 'var(--text-h)', fontSize: '1.05rem' }}>{convite.nomeConvite}</h4>
                         </div>
-                        <div style={{ background: 'var(--code-bg)', padding: '6px 12px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text)' }}>
-                          {total} {total === 1 ? 'Pessoa' : 'Pessoas'}
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <span style={{ background: 'var(--bg)', padding: '4px 8px', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 'bold', color: 'var(--text-h)', border: '1px solid var(--border)' }}>
+                            {totalMembros} {totalMembros === 1 ? 'Pessoa' : 'Pessoas'}
+                          </span>
+                          {totalIsentosConvite > 0 && (
+                            <span style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '4px 8px', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                              {totalIsentosConvite} Isento(s)
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {/* Nomes das Pessoas e Status Inline */}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {/* Membros integrantes */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                         {convite.membros.map((m: any) => {
                           const cor = getStatusCor(m.status);
+                          const ePag = ehPaganteBuffet(m.tipo, m.idade);
+
                           return (
-                            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--code-bg)', padding: '4px 10px', borderRadius: '10px', border: '1px solid var(--border)' }}>
-                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: cor.text }}></div>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--text-h)', fontWeight: '500' }}>
-                                {m.nome || 'Sem nome'} {m.tipo !== 'adulto' ? `(${m.tipo})` : ''}
+                            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg)', padding: '5px 8px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: cor.text }}></div>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-h)', fontWeight: '600' }}>
+                                {m.nome || 'Sem nome'}
                               </span>
+                              
+                              {m.tipo === 'crianca' && (
+                                <span style={{ fontSize: '0.65rem', background: ePag ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: ePag ? '#f59e0b' : '#10b981', padding: '1px 5px', borderRadius: '5px', fontWeight: 'bold' }}>
+                                  {m.idade ? `${m.idade} anos` : 'Criança'} • {ePag ? 'Paga' : 'Isento'}
+                                </span>
+                              )}
+
+                              {m.tipo === 'bebe' && (
+                                <span style={{ fontSize: '0.65rem', background: 'rgba(14, 165, 233, 0.15)', color: '#0ea5e9', padding: '1px 5px', borderRadius: '5px', fontWeight: 'bold' }}>
+                                  Bebê (Isento)
+                                </span>
+                              )}
                             </div>
                           );
                         })}
                       </div>
 
-                      {/* Resumo visual do Convite */}
-                      {(pend > 0 || rec > 0) && (
-                        <div style={{ display: 'flex', gap: '12px', marginTop: '4px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
-                          {conf > 0 && <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 'bold' }}>{conf} Vão</span>}
-                          {pend > 0 && <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 'bold' }}>{pend} Pendentes</span>}
-                          {rec > 0 && <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 'bold' }}>{rec} Não Vão</span>}
-                        </div>
+                      {convite.mesa && (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text)' }}>📍 Mesa: <strong>{convite.mesa}</strong></span>
                       )}
                     </div>
                   );
@@ -256,125 +318,126 @@ export const CasamentoModalConvidados = ({
               )}
             </div>
 
-            <button onClick={abrirFormNovo} style={{ width: '100%', padding: '16px', borderRadius: '20px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '1rem', marginTop: '20px', cursor: 'pointer', flexShrink: 0, boxShadow: '0 8px 25px rgba(138, 43, 226, 0.3)' }}>
-              + Criar Novo Convite
+            {/* BOTÃO FIXO DE CRIAÇÃO */}
+            <button onClick={abrirFormNovo} style={{ width: '100%', padding: '14px', borderRadius: '18px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', fontSize: '0.95rem', marginTop: '14px', cursor: 'pointer', flexShrink: 0 }}>
+              + Criar Novo Convite / Família
             </button>
           </>
         ) : (
-          /* =========================================
-             TELA 2: FORMULÁRIO DE CRIAÇÃO / EDIÇÃO
-             ========================================= */
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          /* FORMULÁRIO DE CRIAÇÃO / EDIÇÃO DE FAMÍLIA */
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.3rem' }}>{idEdicao ? 'Editar Convite' : 'Criar Novo Convite'}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexShrink: 0 }}>
+              <h3 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1.2rem' }}>{idEdicao ? 'Editar Convite' : 'Novo Convite'}</h3>
               <button onClick={() => setFormAberto(false)} style={{ background: 'var(--code-bg)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: 'var(--text-h)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto', paddingBottom: '24px', paddingRight: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px' }}>
               
-              {/* BLOCO 1: DADOS DO CONVITE */}
-              <div style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)' }}>
-                <h4 style={{ margin: '0 0 16px 0', color: 'var(--text-h)', fontSize: '1rem' }}>1. Dados da Família / Grupo</h4>
+              {/* DADOS GERAIS */}
+              <div style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '18px', border: '1px solid var(--border)' }}>
+                <label style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Nome do Convite (Ex: Família Souza)</label>
+                <input type="text" value={nomeConvite} onChange={e => setNomeConvite(e.target.value)} placeholder="Ex: Família Souza, João e Maria..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '6px', fontSize: '0.9rem', outline: 'none' }} />
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
                   <div>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Nome do Convite (Para o Envelope)</label>
-                    <input type="text" value={nomeConvite} onChange={e => setNomeConvite(e.target.value)} placeholder="Ex: Família Souza, João e Maria..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
+                    <label style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Categoria</label>
+                    <select value={categoria} onChange={e => setCategoria(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '4px', fontSize: '0.85rem', outline: 'none' }}>
+                      {CATEGORIAS_CONVITE.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
                   </div>
-                  
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Categoria</label>
-                      <select value={categoria} onChange={e => setCategoria(e.target.value)} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }}>
-                        {CATEGORIAS_CONVITE.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Telefone (WhatsApp)</label>
-                      <input type="text" value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 9..." style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
-                    </div>
+                  <div>
+                    <label style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Telefone</label>
+                    <input type="text" value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(11) 9..." style={{ width: '100%', padding: '10px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '4px', fontSize: '0.85rem', outline: 'none' }} />
                   </div>
                 </div>
               </div>
 
-              {/* BLOCO 2: PESSOAS DO CONVITE (A Mágica acontece aqui) */}
-              <div style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '1rem' }}>2. Quem está neste convite?</h4>
-                  <span style={{ background: 'var(--accent)', color: '#fff', padding: '4px 12px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>{membros.length} Pessoas</span>
+              {/* INTEGRANTES */}
+              <div style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '18px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={{ margin: 0, color: 'var(--text-h)', fontSize: '0.9rem' }}>Pessoas no Convite ({membros.length})</h4>
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {membros.map((membro, index) => (
-                    <div key={membro.id} style={{ background: 'var(--bg)', padding: '16px', borderRadius: '20px', border: '1px solid var(--border)', position: 'relative' }}>
-                      
-                      {/* Botão de Excluir Pessoa */}
-                      {membros.length > 1 && (
-                        <button onClick={() => removerMembro(membro.id)} style={{ position: 'absolute', top: '12px', right: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                           X
-                        </button>
-                      )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {membros.map((membro, index) => {
+                    const ePagante = ehPaganteBuffet(membro.tipo, membro.idade);
 
-                      <h5 style={{ margin: '0 0 12px 0', color: 'var(--text)', fontSize: '0.85rem' }}>Membro {index + 1}</h5>
-                      
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px', marginBottom: '12px' }}>
-                        <input type="text" value={membro.nome} onChange={e => atualizarMembro(membro.id, 'nome', e.target.value)} placeholder="Nome completo" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', fontSize: '0.95rem', outline: 'none' }} />
-                      </div>
-                      
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                        <select value={membro.tipo} onChange={e => atualizarMembro(membro.id, 'tipo', e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', fontSize: '0.9rem', outline: 'none' }}>
-                          <option value="adulto">Adulto (+12)</option>
-                          <option value="crianca">Criança (Não paga)</option>
-                          <option value="bebe">Bebê (Colo)</option>
-                          <option value="staff">Staff/Profissional</option>
-                        </select>
-                        <select value={membro.status} onChange={e => atualizarMembro(membro.id, 'status', e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: getStatusCor(membro.status).bg, color: getStatusCor(membro.status).text, fontWeight: 'bold', fontSize: '0.9rem', outline: 'none' }}>
-                          <option value="pendente">Pendente RSVP</option>
-                          <option value="confirmado">Confirmado ✔️</option>
-                          <option value="recusado">Não Irá ❌</option>
-                        </select>
-                      </div>
+                    return (
+                      <div key={membro.id} style={{ background: 'var(--bg)', padding: '12px', borderRadius: '14px', border: '1px solid var(--border)', position: 'relative' }}>
+                        
+                        {membros.length > 1 && (
+                          <button onClick={() => removerMembro(membro.id)} style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', width: '24px', height: '24px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            ✕
+                          </button>
+                        )}
 
-                      <input type="text" value={membro.restricao || ''} onChange={e => atualizarMembro(membro.id, 'restricao', e.target.value)} placeholder="Restrição Alimentar? (Ex: Vegano, Alergia)" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-h)', fontSize: '0.85rem', outline: 'none' }} />
-                    </div>
-                  ))}
+                        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'var(--text)', display: 'block', marginBottom: '6px' }}>Integrante #{index + 1}</span>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <input type="text" value={membro.nome} onChange={e => atualizarMembro(membro.id, 'nome', e.target.value)} placeholder="Nome completo" style={{ width: '100%', padding: '8px 10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', fontSize: '0.85rem', outline: 'none' }} />
+
+                          <div style={{ display: 'grid', gridTemplateColumns: membro.tipo === 'crianca' ? '1fr 1fr 1fr' : '1fr 1fr', gap: '6px' }}>
+                            <div>
+                              <select value={membro.tipo} onChange={e => atualizarMembro(membro.id, 'tipo', e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', fontSize: '0.8rem', outline: 'none' }}>
+                                <option value="adulto">Adulto (+12)</option>
+                                <option value="crianca">Criança</option>
+                                <option value="bebe">Bebê (Colo)</option>
+                                <option value="staff">Staff/Profissional</option>
+                              </select>
+                            </div>
+
+                            {membro.tipo === 'crianca' && (
+                              <div>
+                                <input type="number" min="0" max="17" value={membro.idade ?? ''} onChange={e => atualizarMembro(membro.id, 'idade', e.target.value)} placeholder="Idade (anos)" style={{ width: '100%', padding: '8px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)', fontSize: '0.8rem', outline: 'none' }} />
+                              </div>
+                            )}
+
+                            <div>
+                              <select value={membro.status} onChange={e => atualizarMembro(membro.id, 'status', e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '10px', border: '1px solid var(--border)', background: getStatusCor(membro.status).bg, color: getStatusCor(membro.status).text, fontWeight: 'bold', fontSize: '0.8rem', outline: 'none' }}>
+                                <option value="pendente">Pendente</option>
+                                <option value="confirmado">Confirmado ✔️</option>
+                                <option value="recusado">Não Irá ❌</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {(membro.tipo === 'crianca' || membro.tipo === 'bebe') && (
+                            <div style={{ padding: '4px 8px', borderRadius: '6px', background: ePagante ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)', color: ePagante ? '#f59e0b' : '#10b981', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                              {ePagante ? '🟡 Paga Buffet (idade > 7 anos)' : '🟢 Isento do Buffet (≤ 7 anos)'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <button onClick={adicionarMembro} style={{ width: '100%', padding: '14px', borderRadius: '16px', background: 'rgba(138, 43, 226, 0.1)', color: 'var(--accent)', border: '1px dashed rgba(138, 43, 226, 0.4)', fontWeight: 'bold', fontSize: '0.95rem', marginTop: '16px', cursor: 'pointer', transition: '0.2s' }}>
-                  + Adicionar Pessoa ao Convite
+                <button onClick={adicionarMembro} style={{ width: '100%', padding: '10px', borderRadius: '12px', background: 'rgba(138, 43, 226, 0.1)', color: 'var(--accent)', border: '1px dashed rgba(138, 43, 226, 0.4)', fontWeight: 'bold', fontSize: '0.85rem', marginTop: '10px', cursor: 'pointer' }}>
+                  + Adicionar Outra Pessoa
                 </button>
               </div>
 
-              {/* BLOCO 3: DETALHES EXTRAS */}
-              <div style={{ background: 'var(--code-bg)', padding: '20px', borderRadius: '24px', border: '1px solid var(--border)' }}>
-                <h4 style={{ margin: '0 0 16px 0', color: 'var(--text-h)', fontSize: '1rem' }}>3. Planejamento (Opcional)</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
-                  <div>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Número da Mesa</label>
-                    <input type="text" value={mesa} onChange={e => setMesa(e.target.value)} placeholder="Ex: Mesa 05" style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none' }} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Observações / Presente</label>
-                    <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Informações úteis sobre esta família..." rows={3} style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '8px', fontSize: '1rem', outline: 'none', resize: 'none' }} />
-                  </div>
-                </div>
+              {/* DETALHES DE ORGANIZAÇÃO */}
+              <div style={{ background: 'var(--code-bg)', padding: '16px', borderRadius: '18px', border: '1px solid var(--border)' }}>
+                <label style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 'bold', textTransform: 'uppercase' }}>Mesa</label>
+                <input type="text" value={mesa} onChange={e => setMesa(e.target.value)} placeholder="Ex: Mesa 04" style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', marginTop: '4px', fontSize: '0.85rem', outline: 'none' }} />
               </div>
 
             </div>
 
             {/* BOTÕES DE AÇÃO */}
-            <div style={{ display: 'flex', gap: '12px', flexShrink: 0, marginTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginTop: '12px' }}>
               {idEdicao && (
-                <button onClick={handleExcluir} disabled={isProcessando} style={{ padding: '16px', borderRadius: '20px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                   Excluir Convite
+                <button onClick={handleExcluir} disabled={isProcessando} style={{ padding: '12px', borderRadius: '14px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+                  Excluir
                 </button>
               )}
-              <button onClick={() => setFormAberto(false)} disabled={isProcessando} style={{ flex: 1, padding: '16px', borderRadius: '20px', background: 'var(--code-bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', cursor: 'pointer' }}>
+              <button onClick={() => setFormAberto(false)} disabled={isProcessando} style={{ flex: 1, padding: '12px', borderRadius: '14px', background: 'var(--code-bg)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 'bold', cursor: 'pointer' }}>
                 Voltar
               </button>
-              <button onClick={handleSalvar} disabled={isProcessando || !nomeConvite || membros.length === 0} style={{ flex: 2, padding: '16px', borderRadius: '20px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', opacity: (!nomeConvite || isProcessando) ? 0.5 : 1 }}>
-                {isProcessando ? 'A Processar...' : 'Salvar Convite'}
+              <button onClick={handleSalvar} disabled={isProcessando || !nomeConvite || membros.length === 0} style={{ flex: 2, padding: '12px', borderRadius: '14px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer', opacity: (!nomeConvite || isProcessando) ? 0.5 : 1 }}>
+                {isProcessando ? 'Salvando...' : 'Salvar Convite'}
               </button>
             </div>
           </div>
